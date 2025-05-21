@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import (
     QPixmap, QPalette, QBrush, QFont, QColor, QIcon, QScreen, QPainter, QCursor
 )
-from PySide6.QtCore import Qt, QSize, QRect, QPoint, Signal # Importar Signal
+from PySide6.QtCore import Qt, QSize, QRect, QPoint, Signal
 
 # --- Configuración de Rutas ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -21,25 +21,24 @@ def accion_pendiente(nombre_accion, parent_window=None):
 
 # --- Clase para el Botón Personalizado ---
 class CustomButton(QFrame):
-    clicked = Signal() # Señal que se emitirá al hacer clic
+    clicked = Signal()
 
     def __init__(self, icon_path=None, text="", parent=None):
         super().__init__(parent)
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        self.setFixedHeight(50) # Altura fija como los QPushButton anteriores
+        self.setFixedHeight(50)
 
-        # --- Estilo Base y Estados ---
-        self.font_family = "San Francisco" # Heredar o definir aquí
+        self.font_family = "San Francisco"
         self.text_color = "#202427"
         self.icon_size = QSize(24, 24)
 
         self.style_normal = f"""
             QFrame {{
-                background-color: rgba(248, 249, 250, 100); /* Alfa 100 */
+                background-color: rgba(248, 249, 250, 100);
                 border: 1px solid rgba(200, 200, 200, 80);
                 border-radius: 10px;
             }}
-            QLabel {{ /* Estilo para las etiquetas dentro de este QFrame */
+            QLabel {{
                 color: {self.text_color};
                 background-color: transparent;
                 border: none;
@@ -48,7 +47,7 @@ class CustomButton(QFrame):
         """
         self.style_hover = f"""
             QFrame {{
-                background-color: rgba(240, 245, 248, 120); /* Alfa 120 */
+                background-color: rgba(240, 245, 248, 120);
                 border: 1px solid rgba(190, 190, 190, 100);
                 border-radius: 10px;
             }}
@@ -56,7 +55,7 @@ class CustomButton(QFrame):
         """
         self.style_pressed = f"""
             QFrame {{
-                background-color: rgba(230, 238, 245, 140); /* Alfa 140 */
+                background-color: rgba(230, 238, 245, 140);
                 border: 1px solid rgba(180, 180, 180, 120);
                 border-radius: 10px;
             }}
@@ -64,71 +63,59 @@ class CustomButton(QFrame):
         """
         self.setStyleSheet(self.style_normal)
 
-        # --- Layout Interno ---
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 0, 10, 0) # Padding Izq/Der para el contenido total
-        layout.setSpacing(8) # Espacio entre icono y texto
+        layout.setContentsMargins(10, 0, 10, 0)
+        layout.setSpacing(8)
 
-        # Icono (QLabel)
         self.icon_label = QLabel()
         if icon_path and os.path.exists(icon_path):
             pixmap = QPixmap(icon_path)
             self.icon_label.setPixmap(pixmap.scaled(self.icon_size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         else:
-            if icon_path: # Si se proveyó ruta pero no existe
+            if icon_path:
                  print(f"Advertencia: No se pudo cargar el icono para CustomButton: {icon_path}")
-            self.icon_label.setFixedSize(0,0) # Ocultar si no hay icono
-            layout.setSpacing(0) # Sin espaciado si no hay icono
+            self.icon_label.setFixedSize(0,0)
+            layout.setSpacing(0)
 
-
-        # Texto Principal (QLabel)
         self.text_label = QLabel(text)
-        font_botones = QFont(self.font_family, 11) # Tamaño de fuente como en tu último script
+        font_botones = QFont(self.font_family, 11)
         self.text_label.setFont(font_botones)
 
-        # Flecha (QLabel)
         self.arrow_label = QLabel(">")
-        self.arrow_label.setFont(font_botones) # Misma fuente que el texto
-        self.arrow_label.setFixedWidth(self.arrow_label.fontMetrics().horizontalAdvance("> ") + 5) # Ancho para la flecha
+        self.arrow_label.setFont(font_botones)
+        self.arrow_label.setFixedWidth(self.arrow_label.fontMetrics().horizontalAdvance("> ") + 5)
 
         layout.addWidget(self.icon_label)
         layout.addWidget(self.text_label)
-        layout.addStretch(1) # Espacio expandible que empuja la flecha a la derecha
+        layout.addStretch(1)
         layout.addWidget(self.arrow_label)
 
-    # --- Eventos para simular botón ---
     def enterEvent(self, event):
         self.setStyleSheet(self.style_hover)
         super().enterEvent(event)
-
     def leaveEvent(self, event):
         self.setStyleSheet(self.style_normal)
         super().leaveEvent(event)
-
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.setStyleSheet(self.style_pressed)
         super().mousePressEvent(event)
-
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            # Solo emitir click si se soltó dentro del widget
             if self.rect().contains(event.position().toPoint()):
-                self.setStyleSheet(self.style_hover) # Vuelve a hover si el mouse sigue encima
+                self.setStyleSheet(self.style_hover)
                 self.clicked.emit()
             else:
-                self.setStyleSheet(self.style_normal) # Vuelve a normal si el mouse se fue
+                self.setStyleSheet(self.style_normal)
         super().mouseReleaseEvent(event)
 
-
-# --- Clase Principal de la Ventana (QMainWindow) ---
 class VentanaGestionLibreria(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Gestión Librería con PySide6")
         self.font_family = "San Francisco"
 
-        target_width = 1366
+        target_width = 1366 # Ancho suficiente para 3 columnas de 300px + espaciados
         target_height = 768
         try:
             screen = QApplication.primaryScreen()
@@ -178,29 +165,113 @@ class VentanaGestionLibreria(QMainWindow):
         cards_holder_widget.setStyleSheet("QWidget { background: transparent; }")
         layout_cards_holder = QHBoxLayout(cards_holder_widget)
         layout_cards_holder.setContentsMargins(0,0,0,0)
-        layout_cards_holder.setSpacing(25)
-        layout_cards_holder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout_cards_holder.setSpacing(25) # Espacio horizontal entre columnas
+        layout_cards_holder.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
 
-        card_width = 300 # Ancho de tarjeta de tu script
-        card_height = 400 # Alto de tarjeta de tu script
+        card_width = 300
+        main_card_height = 280
+        extra_card_height = 160 # Para las tarjetas invisibles de relleno
+        card_spacing = 15 # Espaciado vertical DENTRO de una columna
 
-        opciones_inventario = [
+        # --- Columna para Inventario ---
+        inventario_columna_widget = QWidget()
+        inventario_columna_widget.setStyleSheet("QWidget { background: transparent; }")
+        layout_inventario_columna = QVBoxLayout(inventario_columna_widget)
+        layout_inventario_columna.setContentsMargins(0,0,0,0)
+        layout_inventario_columna.setSpacing(card_spacing)
+
+        # "Eliminar Libro" se movió a Ajustes. Asegúrate que estas 3 son las que quieres.
+        opciones_inventario_main = [
             {"icon": "agregar.png", "text": "  Agregar Libro", "action": "Agregar Libro"},
             {"icon": "buscar.png", "text": "  Buscar Libro", "action": "Buscar Libro"},
-            {"icon": "eliminar.png", "text": "  Eliminar Libro", "action": "Eliminar Libro"},
-            {"icon": "modificar.png", "text": "  Modificar Libro", "action": "Modificar Libro"}
+            {"icon": "modificar.png", "text": "  Modificar Libro", "action": "Modificar Libro"} # Asumiendo esta como la tercera
         ]
-        inventario_card = self._crear_tarjeta("Inventario", opciones_inventario, card_width, card_height)
-        layout_cards_holder.addWidget(inventario_card)
+        
+        inventario_card_principal = self._crear_tarjeta(
+            "Inventario", 
+            opciones_inventario_main, 
+            card_width, 
+            main_card_height
+        )
+        layout_inventario_columna.addWidget(inventario_card_principal)
 
-        opciones_finanzas = [
+        # Tarjeta invisible de relleno para Inventario
+        inventario_card_relleno_invisible = self._crear_tarjeta(
+            None, [], card_width, extra_card_height, con_titulo=False
+        )
+        inventario_card_relleno_invisible.setVisible(False)
+        layout_inventario_columna.addWidget(inventario_card_relleno_invisible)
+        
+        layout_inventario_columna.addStretch(1)
+        layout_cards_holder.addWidget(inventario_columna_widget)
+
+        # --- Columna para Finanzas ---
+        finanzas_columna_widget = QWidget()
+        finanzas_columna_widget.setStyleSheet("QWidget { background: transparent; }")
+        layout_finanzas_columna = QVBoxLayout(finanzas_columna_widget)
+        layout_finanzas_columna.setContentsMargins(0,0,0,0)
+        layout_finanzas_columna.setSpacing(card_spacing)
+
+        opciones_finanzas_main = [
             {"icon": "vender.png", "text": "  Vender Libro", "action": "Vender Libro"},
             {"icon": "ingreso.png", "text": "  Reportar Ingreso", "action": "Reportar Ingreso"},
             {"icon": "gasto.png", "text": "  Reportar Gasto", "action": "Reportar Gasto"},
+        ]
+        finanzas_card_principal = self._crear_tarjeta(
+            "Finanzas", 
+            opciones_finanzas_main, 
+            card_width, 
+            main_card_height
+        )
+        layout_finanzas_columna.addWidget(finanzas_card_principal)
+
+        opciones_finanzas_extra = [
             {"icon": "contabilidad.png", "text": "  Generar Contabilidad", "action": "Generar Contabilidad"},
-            {"icon": "pedidos.png", "text": "  Generar Pedidos", "action": "Generar Pedidos"}        ]
-        finanzas_card = self._crear_tarjeta("Finanzas", opciones_finanzas, card_width, card_height)
-        layout_cards_holder.addWidget(finanzas_card)
+            {"icon": "pedidos.png", "text": "  Generar Pedidos", "action": "Generar Pedidos"}
+        ]
+        finanzas_card_extra = self._crear_tarjeta(
+            None, 
+            opciones_finanzas_extra, 
+            card_width, 
+            extra_card_height, 
+            con_titulo=False
+        )
+        layout_finanzas_columna.addWidget(finanzas_card_extra)
+        
+        layout_finanzas_columna.addStretch(1)
+        layout_cards_holder.addWidget(finanzas_columna_widget)
+        
+        # --- Columna para Ajustes ---
+        ajustes_columna_widget = QWidget()
+        ajustes_columna_widget.setStyleSheet("QWidget { background: transparent; }")
+        layout_ajustes_columna = QVBoxLayout(ajustes_columna_widget)
+        layout_ajustes_columna.setContentsMargins(0,0,0,0)
+        layout_ajustes_columna.setSpacing(card_spacing)
+
+        opciones_ajustes_main = [
+            # Reemplaza 'ajustes_finanzas.png' y 'salir.png' con los nombres de tus iconos
+            {"icon": "ajustes_finanzas.png", "text": "  Modificar Finanzas", "action": "Modificar Finanzas"}, 
+            {"icon": "eliminar.png", "text": "  Eliminar Libro", "action": "Eliminar Libro"},
+            {"icon": "salir.png", "text": "  Salir", "action": "SALIR_APP"} 
+        ]
+        
+        ajustes_card_principal = self._crear_tarjeta(
+            "Ajustes", 
+            opciones_ajustes_main, 
+            card_width, 
+            main_card_height
+        )
+        layout_ajustes_columna.addWidget(ajustes_card_principal)
+
+        # Tarjeta invisible de relleno para Ajustes
+        ajustes_card_relleno_invisible = self._crear_tarjeta(
+            None, [], card_width, extra_card_height, con_titulo=False
+        )
+        ajustes_card_relleno_invisible.setVisible(False)
+        layout_ajustes_columna.addWidget(ajustes_card_relleno_invisible)
+
+        layout_ajustes_columna.addStretch(1)
+        layout_cards_holder.addWidget(ajustes_columna_widget)
         
         layout_overall_content.addWidget(cards_holder_widget)
         layout_overall_content.addStretch(1)
@@ -209,7 +280,7 @@ class VentanaGestionLibreria(QMainWindow):
         self.root_layout.addWidget(overall_content_widget, 0, Qt.AlignmentFlag.AlignHCenter)
         self.root_layout.addStretch(1)
 
-    def _crear_tarjeta(self, titulo_str, opciones_data, ancho, alto):
+    def _crear_tarjeta(self, titulo_str, opciones_data, ancho, alto, con_titulo=True):
         tarjeta = QFrame()
         tarjeta.setFixedSize(ancho, alto)
         tarjeta.setStyleSheet(f"""
@@ -220,33 +291,42 @@ class VentanaGestionLibreria(QMainWindow):
             }}
         """)
         layout_tarjeta = QVBoxLayout(tarjeta)
-        layout_tarjeta.setContentsMargins(30, 30, 30, 30) # Padding dentro de la tarjeta
+        
+        top_margin = 15 # Margen superior por defecto para tarjetas sin título con opciones
+        if con_titulo and titulo_str:
+            top_margin = 30
+        elif not con_titulo and not opciones_data: # Tarjeta de relleno invisible
+            top_margin = 0 # O un valor pequeño si se prefiere, pero 0 para que sea solo espacio
+
+        layout_tarjeta.setContentsMargins(30, top_margin, 30, 30) 
         layout_tarjeta.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout_tarjeta.setSpacing(10) # Espacio entre título y botones, y entre botones
+        layout_tarjeta.setSpacing(10)
 
-        titulo_seccion = QLabel(titulo_str)
-        font_titulo_seccion = QFont(self.font_family, 16, QFont.Weight.Bold)
-        titulo_seccion.setFont(font_titulo_seccion)
-        titulo_seccion.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        titulo_seccion.setStyleSheet("QLabel { color: black; background-color: transparent; padding-bottom: 10px; border: none; }")
-        layout_tarjeta.addWidget(titulo_seccion)
-
-        # No necesitamos font_botones aquí, se define en CustomButton
+        if con_titulo and titulo_str:
+            titulo_seccion = QLabel(titulo_str)
+            font_titulo_seccion = QFont(self.font_family, 16, QFont.Weight.Bold)
+            titulo_seccion.setFont(font_titulo_seccion)
+            titulo_seccion.setAlignment(Qt.AlignmentFlag.AlignLeft)
+            titulo_seccion.setStyleSheet("QLabel { color: black; background-color: transparent; padding-bottom: 10px; border: none; }")
+            layout_tarjeta.addWidget(titulo_seccion)
 
         for item_data in opciones_data:
             texto_visible_original = item_data["text"]
-            texto_accion = item_data["action"]
             nombre_archivo_icono = item_data["icon"]
+            accion_definida = item_data["action"]
             
             ruta_icono_completa = os.path.join(IMAGE_DIR, nombre_archivo_icono)
             
-            # Usamos nuestro CustomButton
             boton_personalizado = CustomButton(icon_path=ruta_icono_completa, text=texto_visible_original.strip())
-            boton_personalizado.clicked.connect(lambda accion=texto_accion: accion_pendiente(accion, self))
+            
+            if accion_definida == "SALIR_APP":
+                boton_personalizado.clicked.connect(self.close) 
+            else:
+                boton_personalizado.clicked.connect(lambda accion=accion_definida: accion_pendiente(accion, self))
             
             layout_tarjeta.addWidget(boton_personalizado)
 
-        layout_tarjeta.addStretch(1) # Empuja los botones hacia arriba si hay espacio extra en la tarjeta
+        layout_tarjeta.addStretch(1)
         return tarjeta
 
     def paintEvent(self, event):
@@ -262,9 +342,11 @@ class VentanaGestionLibreria(QMainWindow):
             painter.drawPixmap(point, scaled_pixmap)
         super().paintEvent(event)
 
+
     def resizeEvent(self, event):
         self.update()
         super().resizeEvent(event)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
