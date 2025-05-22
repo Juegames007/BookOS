@@ -80,6 +80,7 @@ class BookService:
         Guarda un libro en la base de datos.
         
         Si el libro ya existe, actualiza sus datos.
+        Valida que el precio sea al menos 1000.
         
         Args:
             book_info: Diccionario con los datos del libro.
@@ -89,6 +90,11 @@ class BookService:
         """
         try:
             isbn = book_info["ISBN"]
+            precio = book_info.get("Precio", 0)
+
+            # Validación del precio mínimo
+            if not isinstance(precio, (int, float)) or precio < 1000:
+                return False, "El precio del libro debe ser un número igual o mayor a 1000."
             
             # Guardar en la tabla libros
             columnas = ["isbn", "titulo", "autor", "editorial", "imagen_url", "categorias", "precio_venta"]

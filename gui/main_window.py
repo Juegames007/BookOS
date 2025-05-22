@@ -17,6 +17,7 @@ from app.dependencies import DependencyFactory
 from gui.common.widgets import CustomButton
 from gui.common.styles import BACKGROUND_IMAGE_PATH, FONTS
 from gui.dialogs.add_book_dialog import AddBookDialog
+from gui.dialogs.search_book_dialog import SearchBookDialog
 from features.book_service import BookService
 
 def accion_pendiente(nombre_accion, parent_window=None):
@@ -40,6 +41,17 @@ def accion_pendiente(nombre_accion, parent_window=None):
         
         # Crear y mostrar el diálogo inyectando el servicio
         dialog = AddBookDialog(book_service, parent_window)
+        dialog.exec()
+    elif nombre_accion == "Buscar Libro":
+        # Obtener dependencias necesarias para el diálogo
+        data_manager = DependencyFactory.get_data_manager()
+        book_info_service = DependencyFactory.get_book_info_service()
+        
+        # Crear servicio de libros
+        book_service = BookService(data_manager, book_info_service)
+        
+        # Crear y mostrar el diálogo inyectando el servicio
+        dialog = SearchBookDialog(book_service, parent_window)
         dialog.exec()
     else:
         QMessageBox.information(parent_window, "Acción Pendiente",

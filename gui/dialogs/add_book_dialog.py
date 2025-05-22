@@ -35,18 +35,35 @@ class AddBookDialog(QDialog):
         """
         super().__init__(parent)
         self.setWindowTitle("Agregar Libro")
-        self.setMinimumSize(650, 700)
+        self.setMinimumSize(650, 850)
         
         # Configuración de la ventana
         self.font_family = FONTS["family"]
         
         # Almacenar las dependencias inyectadas
         self.book_service = book_service
+        self.ultimo_isbn_procesado_con_enter = None
         
-        # Configuración del fondo
-        self.background_image_path = BACKGROUND_IMAGE_PATH
-        self.background_pixmap = QPixmap(self.background_image_path)
+        # Configuración del fondo con fallback
+        project_root_for_bg = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        specific_background_path = os.path.join(project_root_for_bg, "app", "imagenes", "fondo_agregar.png")
+
+        if os.path.exists(specific_background_path):
+            self.background_image_path = specific_background_path
+            self.background_pixmap = QPixmap(self.background_image_path)
+            if self.background_pixmap.isNull(): # Comprobar si el pixmap es válido aunque el archivo exista
+                print(f"Advertencia: No se pudo cargar la imagen de fondo específica: {specific_background_path}. Intentando fallback.")
+                self.background_image_path = BACKGROUND_IMAGE_PATH # Fallback a la imagen global
+                self.background_pixmap = QPixmap(self.background_image_path)
+        else:
+            print(f"Advertencia: No se encontró la imagen de fondo específica: {specific_background_path}. Usando fondo global.")
+            self.background_image_path = BACKGROUND_IMAGE_PATH # Fallback a la imagen global
+            self.background_pixmap = QPixmap(self.background_image_path)
         
+        # Comprobación final por si el fondo global tampoco se carga
+        if self.background_pixmap.isNull():
+            print(f"Advertencia: No se pudo cargar ninguna imagen de fondo. Ruta global intentada: {BACKGROUND_IMAGE_PATH}")
+
         self._setup_ui()
         
     def _setup_ui(self):
@@ -54,7 +71,7 @@ class AddBookDialog(QDialog):
         # Crear el layout principal directamente en el QDialog
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
         # Contenedor para centrar el contenido principal y limitar su ancho
         content_container = QWidget()
@@ -65,14 +82,17 @@ class AddBookDialog(QDialog):
         # --- Título del Diálogo ---
         title_label = QLabel("Agregar Libro")
         try:
-            title_font = QFont(FONTS["family_title"], FONTS["size_large_title"], QFont.Weight.Bold)
+            title_font = QFont(FONTS["family_title"], FONTS["size_large_title"], QFont.Weight.Normal)
         except KeyError: # Si la fuente 'Roboto' no está definida o no se carga
             try:
-                title_font = QFont(FONTS["family_fallback"], FONTS["size_large_title"], QFont.Weight.Bold)
+                title_font = QFont(FONTS["family_fallback"], FONTS["size_large_title"], QFont.Weight.Normal)
             except KeyError: # Fallback a una fuente genérica si 'Arial' tampoco está
                 title_font = QFont() # Fuente por defecto del sistema
                 title_font.setPointSize(FONTS.get("size_large_title", 24))
-                title_font.setWeight(QFont.Weight.Bold)
+                title_font.setWeight(QFont.Weight.Normal)
+                
+        # Añadir un poco de cursiva para que se vea más bonito al titulo
+        title_font.setItalic(True)
 
         title_label.setFont(title_font)
         title_label.setStyleSheet(f"color: {COLORS['text_primary']}; background-color: transparent; padding-bottom: 10px;")
@@ -105,12 +125,12 @@ class AddBookDialog(QDialog):
         content_layout.addSpacing(10)
 
         # --- Sección de instrucciones ---
-        instruction_label = QLabel("Ingrese el ISBN y presione Enter o 'Buscar' para continuar")
-        instruction_label.setFont(QFont(self.font_family, FONTS["size_medium"]))
-        instruction_label.setStyleSheet(f"color: {COLORS['text_primary']}; background-color: transparent;")
-        instruction_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        content_layout.addWidget(instruction_label)
-        content_layout.addSpacing(15)
+        #instruction_label = QLabel("Ingrese el ISBN y presione Enter o 'Buscar' para continuar")
+        #instruction_label.setFont(QFont(self.font_family, FONTS["size_medium"]))
+        #instruction_label.setStyleSheet(f"color: {COLORS['text_primary']}; background-color: transparent;")
+        #instruction_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        #content_layout.addWidget(instruction_label)
+        #content_layout.addSpacing(15)
         
         # --- Campo ISBN con diseño destacado ---
         isbn_frame = QFrame()
@@ -122,6 +142,7 @@ class AddBookDialog(QDialog):
                 padding: 10px;
             }}
         """)
+        isbn_frame.setMaximumWidth(400)
         isbn_layout = QVBoxLayout(isbn_frame)
         
         isbn_header = QLabel("ISBN:")
@@ -131,23 +152,28 @@ class AddBookDialog(QDialog):
         
         input_layout = QHBoxLayout()
         self.isbn_input = QLineEdit()
-        self.isbn_input.setPlaceholderText("Ingrese el ISBN y presione Enter")
-        self.isbn_input.setFixedHeight(40)
-        self.isbn_input.setFont(QFont(self.font_family, FONTS["size_medium"]))
-        self.isbn_input.setStyleSheet(STYLES["input_field"])
+        self.isbn_input.setPlaceholderText("Ingrese el ISBN")
+        self.isbn_input.setFixedHeight(35)
+        # Comentamos setFont para ver si afecta el tamaño del placeholder
+        # self.isbn_input.setFont(QFont(self.font_family, FONTS["size_medium"]))
+        
+        # Restauramos STYLES["input_field"] y añadimos el estilo del placeholder
+        self.isbn_input.setStyleSheet(STYLES["input_field"] + 
+                                    f"QLineEdit::placeholder {{ font-size: 15px; color: {COLORS['text_secondary']}; }}") 
         self.isbn_input.returnPressed.connect(self.buscar_isbn)
         
         self.buscar_button = QPushButton("Buscar")
         self.buscar_button.setFixedHeight(40)
         self.buscar_button.setFont(QFont(self.font_family, FONTS["size_normal"]))
         self.buscar_button.setStyleSheet(STYLES["button_primary_full"])
+        self.buscar_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.buscar_button.clicked.connect(self.buscar_isbn)
         
         input_layout.addWidget(self.isbn_input)
         input_layout.addWidget(self.buscar_button)
         isbn_layout.addLayout(input_layout)
         
-        content_layout.addWidget(isbn_frame)
+        content_layout.addWidget(isbn_frame, alignment=Qt.AlignmentFlag.AlignHCenter)
         content_layout.addSpacing(20)
         
         # --- Form layout para el resto de los campos ---
@@ -185,12 +211,14 @@ class AddBookDialog(QDialog):
         form_layout = QFormLayout()
         form_layout.setSpacing(12)
         form_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        form_layout.setLabelAlignment(Qt.AlignVCenter)
         
         # Crear y configurar los campos
         # Título
         label_titulo = QLabel("Título:")
         label_titulo.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.titulo_input = QLineEdit()
+        self.titulo_input.setFixedHeight(35)
         self.titulo_input.setReadOnly(True)
         self.titulo_input.setPlaceholderText("Se completará después de buscar ISBN")
         self.titulo_input.returnPressed.connect(lambda: self._focus_next_input(self.autor_input))
@@ -200,6 +228,7 @@ class AddBookDialog(QDialog):
         label_autor = QLabel("Autor:")
         label_autor.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.autor_input = QLineEdit()
+        self.autor_input.setFixedHeight(35)
         self.autor_input.setReadOnly(True)
         self.autor_input.setPlaceholderText("Se completará después de buscar ISBN")
         self.autor_input.returnPressed.connect(lambda: self._focus_next_input(self.editorial_input))
@@ -209,6 +238,7 @@ class AddBookDialog(QDialog):
         label_editorial = QLabel("Editorial:")
         label_editorial.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.editorial_input = QLineEdit()
+        self.editorial_input.setFixedHeight(35)
         self.editorial_input.setReadOnly(True)
         self.editorial_input.setPlaceholderText("Se completará después de buscar ISBN")
         self.editorial_input.returnPressed.connect(lambda: self._focus_next_input(self.imagen_input))
@@ -218,6 +248,7 @@ class AddBookDialog(QDialog):
         label_imagen = QLabel("URL Imagen:")
         label_imagen.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.imagen_input = QLineEdit()
+        self.imagen_input.setFixedHeight(35)
         self.imagen_input.setReadOnly(True)
         self.imagen_input.setPlaceholderText("Se completará después de buscar ISBN")
         self.imagen_input.returnPressed.connect(lambda: self._focus_next_input(self.categorias_input))
@@ -227,24 +258,31 @@ class AddBookDialog(QDialog):
         label_categorias = QLabel("Categorías:")
         label_categorias.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.categorias_input = QLineEdit()
+        self.categorias_input.setFixedHeight(35)
         self.categorias_input.setReadOnly(True)
         self.categorias_input.setPlaceholderText("Se completará después de buscar ISBN")
         self.categorias_input.returnPressed.connect(lambda: self._focus_next_input(self.precio_input))
         form_layout.addRow(label_categorias, self.categorias_input)
 
-        # Precio
+        # Precio - Vuelve a ser un campo simple en el QFormLayout
         label_precio = QLabel("Precio:")
         label_precio.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        
         self.precio_input = QLineEdit()
+        self.precio_input.setFixedHeight(35)
         self.precio_input.setReadOnly(True) 
-        self.precio_input.setPlaceholderText("Solo números")
+        self.precio_input.setPlaceholderText("Ej: 15.000") # Placeholder actualizado
         self.precio_input.returnPressed.connect(lambda: self._focus_next_input(self.posicion_input))
-        form_layout.addRow(label_precio, self.precio_input)
+        self.precio_input.editingFinished.connect(self._formatear_texto_precio) # Formatear al perder foco
+        # El estilo se tomará del QFrame details_frame que define estilos para QLineEdit
+        # self.precio_input.setStyleSheet(...) # Ya no se aplica estilo inline complejo aquí
+        form_layout.addRow(label_precio, self.precio_input) # Añadir directamente al form_layout
 
         # Posición
         label_posicion = QLabel("Posición:")
         label_posicion.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.posicion_input = QLineEdit()
+        self.posicion_input.setFixedHeight(35)
         self.posicion_input.setReadOnly(True)
         self.posicion_input.setPlaceholderText("Ej: 01A, 12B, 03C")
         self.posicion_input.returnPressed.connect(self.guardar_libro_on_enter)
@@ -266,6 +304,7 @@ class AddBookDialog(QDialog):
         self.cancelar_button.setFixedHeight(40)
         self.cancelar_button.setFont(QFont(self.font_family, FONTS["size_normal"]))
         self.cancelar_button.setStyleSheet(STYLES["button_danger_full"])
+        self.cancelar_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.cancelar_button.clicked.connect(self.reject)
         
         button_layout.addStretch(1)
@@ -276,8 +315,9 @@ class AddBookDialog(QDialog):
         content_layout.addLayout(button_layout)
 
         # Añadir el contenedor de contenido al layout principal del diálogo
+        main_layout.addStretch(1) # Stretch superior para empujar el contenido hacia el centro
         main_layout.addWidget(content_container)
-        main_layout.addStretch(1) # Empuja todo hacia arriba
+        main_layout.addStretch(1) # Stretch inferior para empujar el contenido hacia el centro
         
         # Dar foco al campo de ISBN y ajustar tamaño
         self.isbn_input.setFocus()
@@ -290,8 +330,10 @@ class AddBookDialog(QDialog):
         """Actualiza el estilo del botón Guardar según su estado (habilitado/deshabilitado)."""
         if self.guardar_button.isEnabled():
             self.guardar_button.setStyleSheet(STYLES["button_success_full"])
+            self.guardar_button.setCursor(Qt.CursorShape.PointingHandCursor) # Mano si habilitado
         else:
             self.guardar_button.setStyleSheet(STYLES["button_disabled"])
+            self.guardar_button.setCursor(Qt.CursorShape.ArrowCursor) # Flecha si deshabilitado
 
     def _focus_next_input(self, next_input_field: QLineEdit):
         """Mueve el foco al siguiente campo de entrada especificado."""
@@ -361,20 +403,25 @@ class AddBookDialog(QDialog):
         Si encuentra el libro, rellena los campos automáticamente.
         Si no lo encuentra, habilita todos los campos para entrada manual.
         """
-        isbn = self.isbn_input.text().strip()
-        if not isbn:
+        isbn_actual = self.isbn_input.text().strip()
+        
+        if isbn_actual == self.ultimo_isbn_procesado_con_enter and self.guardar_button.isEnabled():
+            return
+
+        if not isbn_actual:
             QMessageBox.warning(self, "Error", "Por favor ingrese un ISBN.")
             return
 
-        if not Validator.is_valid_isbn(isbn): # Validar ISBN
+        if not Validator.is_valid_isbn(isbn_actual): # Validar ISBN
             QMessageBox.warning(self, "Error", "El ISBN ingresado no es válido. Debe tener 10 o 13 dígitos numéricos.")
             self.isbn_input.selectAll()
             self.isbn_input.setFocus()
             return
             
-        # Intentar obtener información del libro usando el servicio
-        book_data = self.book_service.buscar_libro_por_isbn(isbn)
+        book_data = self.book_service.buscar_libro_por_isbn(isbn_actual)
         
+        self.ultimo_isbn_procesado_con_enter = isbn_actual
+
         if book_data:
             # Rellenar campos con la información obtenida
             self.titulo_input.setText(book_data.get("Título", ""))
@@ -416,12 +463,34 @@ class AddBookDialog(QDialog):
             
             self.titulo_input.setFocus()
 
+    def _limpiar_valor_precio(self, texto_con_formato: str) -> str:
+        """Elimina los separadores de miles del texto del precio."""
+        return texto_con_formato.replace(".", "") # Solo quitar los puntos
+
+    def _formatear_texto_precio(self):
+        """Formatea el texto del QLineEdit de precio para mostrar separadores de miles."""
+        current_text_limpio = self._limpiar_valor_precio(self.precio_input.text())
+        if not current_text_limpio.isdigit():
+            # Si después de limpiar no son solo dígitos (podría estar vacío o tener otros caracteres)
+            # podríamos optar por limpiarlo o dejarlo como está si la validación al guardar lo maneja.
+            # Por ahora, si no es un número válido, no lo formateamos.
+            return
+        try:
+            valor_numerico = int(current_text_limpio)
+            # Formato para pesos colombianos (o similar), ej: 1.234.567
+            # Usamos f-string con formato de comas y luego reemplazamos comas por puntos.
+            texto_formateado = f"{valor_numerico:,}".replace(",", ".")
+            self.precio_input.setText(texto_formateado)
+        except ValueError:
+            # En caso de que la conversión falle, aunque isdigit debería prevenirlo
+            pass # No hacer nada, dejar el texto como está.
+
     def guardar_libro(self):
         """
         Guarda el libro en la base de datos usando el servicio de libros.
         
-        Realiza validaciones de los campos obligatorios, y luego guarda
-        el libro y lo añade al inventario.
+        Realiza validaciones de los campos obligatorios, incluyendo el precio mínimo,
+        y luego guarda el libro y lo añade al inventario.
         """
         # Validar campos obligatorios
         if not self.titulo_input.text().strip():
@@ -430,17 +499,26 @@ class AddBookDialog(QDialog):
             return
             
         try:
-            precio_texto = self.precio_input.text().strip()
-            if not precio_texto:
+            # Limpiar el texto del precio antes de convertirlo
+            precio_texto_limpio = self._limpiar_valor_precio(self.precio_input.text())
+            
+            if not precio_texto_limpio:
                 QMessageBox.warning(self, "Error", "El precio es obligatorio.")
                 self.precio_input.setFocus()
                 return
-            # Validar que el precio sea un número entero
             try:
-                precio = int(precio_texto)
+                precio = int(precio_texto_limpio)
             except ValueError:
-                QMessageBox.warning(self, "Error", "El precio debe ser un número entero.")
+                QMessageBox.warning(self, "Error", "El precio debe ser un número entero válido (ej: 15000 o 15.000).")
                 self.precio_input.setFocus()
+                self.precio_input.selectAll()
+                return
+            
+            # Validación del precio mínimo en la GUI
+            if precio < 1000:
+                QMessageBox.warning(self, "Error", "El precio del libro debe ser igual o mayor a 1000.")
+                self.precio_input.setFocus()
+                self.precio_input.selectAll()
                 return
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Error en el precio: {str(e)}")
