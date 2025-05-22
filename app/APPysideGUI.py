@@ -18,7 +18,7 @@ BACKGROUND_IMAGE_PATH = os.path.join(IMAGE_DIR, "fondo.png")
 def accion_pendiente(nombre_accion, parent_window=None):
     QMessageBox.information(parent_window, "Acción Pendiente",
                             f"La funcionalidad '{nombre_accion}' está pendiente de implementación.")
-
+aa = 1
 # --- Clase para el Botón Personalizado ---
 class CustomButton(QFrame):
     clicked = Signal()
@@ -27,8 +27,7 @@ class CustomButton(QFrame):
         super().__init__(parent)
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.setFixedHeight(50)
-
-        self.font_family = "San Francisco"
+        self.font_family = "San Francisco" #xd
         self.text_color = "#202427"
         self.icon_size = QSize(24, 24)
 
