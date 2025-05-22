@@ -1,0 +1,20 @@
+{
+    "tablas": [
+      {
+        "nombre": "libros",
+        "definicion": "(isbn TEXT PRIMARY KEY, titulo TEXT NOT NULL, autor TEXT, editorial TEXT, imagen_url TEXT, categorias TEXT, precio_venta INTEGER, fecha_registro DATE DEFAULT (date('now')))"
+      },
+      {
+        "nombre": "inventario",
+        "definicion": "(id_inventario INTEGER PRIMARY KEY AUTOINCREMENT, libro_isbn TEXT NOT NULL, posicion TEXT, cantidad INTEGER NOT NULL DEFAULT 1, fecha_adquisicion DATE DEFAULT (date('now')), fecha_actualizacion_cantidad DATE DEFAULT (date('now')), FOREIGN KEY (libro_isbn) REFERENCES libros (isbn) ON DELETE CASCADE ON UPDATE CASCADE)"
+      },
+      {
+        "nombre": "ventas",
+        "definicion": "(id_venta INTEGER PRIMARY KEY AUTOINCREMENT, item_inventario_id INTEGER, libro_isbn TEXT NOT NULL, cantidad_vendida INTEGER NOT NULL, precio_unitario_venta INTEGER NOT NULL, precio_total_venta INTEGER NOT NULL, fecha_venta DATETIME DEFAULT (datetime('now')), medio_de_pago TEXT, FOREIGN KEY (libro_isbn) REFERENCES libros (isbn) ON DELETE RESTRICT ON UPDATE CASCADE, FOREIGN KEY (item_inventario_id) REFERENCES inventario (id_inventario) ON DELETE SET NULL ON UPDATE CASCADE)"
+      },
+      {
+        "nombre": "historial_busquedas",
+        "definicion": "(id_busqueda INTEGER PRIMARY KEY AUTOINCREMENT, termino_buscado TEXT NOT NULL, fecha_busqueda DATETIME DEFAULT (datetime('now')), resultados_encontrados INTEGER DEFAULT 0)"
+      }
+    ]
+  }

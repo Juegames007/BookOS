@@ -348,7 +348,7 @@ class VentanaGestionLibreria(QMainWindow):
         super().resizeEvent(event)
 
 
-if __name__ == "__main__":
+def run_app():
     app = QApplication(sys.argv)
     ventana = VentanaGestionLibreria()
     ventana.show()
