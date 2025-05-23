@@ -58,12 +58,12 @@ class AddBookDialog(QDialog):
         else:
             print(f"Advertencia: No se encontró la imagen de fondo específica: {specific_background_path}. Usando fondo global.")
             self.background_image_path = BACKGROUND_IMAGE_PATH # Fallback a la imagen global
-            self.background_pixmap = QPixmap(self.background_image_path)
+        self.background_pixmap = QPixmap(self.background_image_path)
         
         # Comprobación final por si el fondo global tampoco se carga
         if self.background_pixmap.isNull():
             print(f"Advertencia: No se pudo cargar ninguna imagen de fondo. Ruta global intentada: {BACKGROUND_IMAGE_PATH}")
-
+        
         self._setup_ui()
         
     def _setup_ui(self):
@@ -216,44 +216,44 @@ class AddBookDialog(QDialog):
         # Crear y configurar los campos
         # Título
         label_titulo = QLabel("Título:")
-        label_titulo.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        label_titulo.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.titulo_input = QLineEdit()
         self.titulo_input.setFixedHeight(35)
         self.titulo_input.setReadOnly(True)
         self.titulo_input.setPlaceholderText("Se completará después de buscar ISBN")
         self.titulo_input.returnPressed.connect(lambda: self._focus_next_input(self.autor_input))
         form_layout.addRow(label_titulo, self.titulo_input)
-
+        
         # Autor
         label_autor = QLabel("Autor:")
-        label_autor.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        label_autor.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.autor_input = QLineEdit()
         self.autor_input.setFixedHeight(35)
         self.autor_input.setReadOnly(True)
         self.autor_input.setPlaceholderText("Se completará después de buscar ISBN")
         self.autor_input.returnPressed.connect(lambda: self._focus_next_input(self.editorial_input))
         form_layout.addRow(label_autor, self.autor_input)
-
+        
         # Editorial
         label_editorial = QLabel("Editorial:")
-        label_editorial.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        label_editorial.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.editorial_input = QLineEdit()
         self.editorial_input.setFixedHeight(35)
         self.editorial_input.setReadOnly(True)
         self.editorial_input.setPlaceholderText("Se completará después de buscar ISBN")
         self.editorial_input.returnPressed.connect(lambda: self._focus_next_input(self.imagen_input))
         form_layout.addRow(label_editorial, self.editorial_input)
-
+        
         # URL Imagen
         label_imagen = QLabel("URL Imagen:")
-        label_imagen.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        label_imagen.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.imagen_input = QLineEdit()
         self.imagen_input.setFixedHeight(35)
         self.imagen_input.setReadOnly(True)
         self.imagen_input.setPlaceholderText("Se completará después de buscar ISBN")
         self.imagen_input.returnPressed.connect(lambda: self._focus_next_input(self.categorias_input))
         form_layout.addRow(label_imagen, self.imagen_input)
-
+        
         # Categorías
         label_categorias = QLabel("Categorías:")
         label_categorias.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
@@ -266,18 +266,18 @@ class AddBookDialog(QDialog):
 
         # Precio - Vuelve a ser un campo simple en el QFormLayout
         label_precio = QLabel("Precio:")
-        label_precio.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        label_precio.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         
         self.precio_input = QLineEdit()
         self.precio_input.setFixedHeight(35)
-        self.precio_input.setReadOnly(True) 
+        self.precio_input.setReadOnly(True)
         self.precio_input.setPlaceholderText("Ej: 15.000") # Placeholder actualizado
         self.precio_input.returnPressed.connect(lambda: self._focus_next_input(self.posicion_input))
         self.precio_input.editingFinished.connect(self._formatear_texto_precio) # Formatear al perder foco
         # El estilo se tomará del QFrame details_frame que define estilos para QLineEdit
         # self.precio_input.setStyleSheet(...) # Ya no se aplica estilo inline complejo aquí
         form_layout.addRow(label_precio, self.precio_input) # Añadir directamente al form_layout
-
+        
         # Posición
         label_posicion = QLabel("Posición:")
         label_posicion.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
@@ -315,16 +315,18 @@ class AddBookDialog(QDialog):
         content_layout.addLayout(button_layout)
 
         # Añadir el contenedor de contenido al layout principal del diálogo
-        main_layout.addStretch(1) # Stretch superior para empujar el contenido hacia el centro
+        main_layout.addStretch(1)
         main_layout.addWidget(content_container)
-        main_layout.addStretch(1) # Stretch inferior para empujar el contenido hacia el centro
+        main_layout.addStretch(1)
         
-        # Dar foco al campo de ISBN y ajustar tamaño
-        self.isbn_input.setFocus()
+        # Llamada final para ajustar el tamaño
         self.adjustSize()
 
         # Aplicar estilo inicial al botón guardar
         self._actualizar_estilo_guardar_button()
+        
+        # Dar foco al campo de ISBN después de configurar todo y ajustar tamaño
+        self.isbn_input.setFocus()
 
     def _actualizar_estilo_guardar_button(self):
         """Actualiza el estilo del botón Guardar según su estado (habilitado/deshabilitado)."""
@@ -421,7 +423,7 @@ class AddBookDialog(QDialog):
         book_data = self.book_service.buscar_libro_por_isbn(isbn_actual)
         
         self.ultimo_isbn_procesado_con_enter = isbn_actual
-
+        
         if book_data:
             # Rellenar campos con la información obtenida
             self.titulo_input.setText(book_data.get("Título", ""))

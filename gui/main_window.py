@@ -9,10 +9,11 @@ import os
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QSizePolicy, QSpacerItem, QMessageBox, QFrame, QApplication,
-    QLineEdit
+    QLineEdit, QStackedWidget, QListWidget, QAbstractScrollArea, QScrollArea
 )
 from PySide6.QtGui import QFont, QPixmap, QPainter, QIcon
-from PySide6.QtCore import Qt, QPoint, QSize
+from PySide6.QtCore import Qt, QPoint, QSize, QEasingCurve, QPropertyAnimation, QRect
+from typing import List, Dict, Any
 
 from app.dependencies import DependencyFactory
 from gui.common.widgets import CustomButton
@@ -69,6 +70,15 @@ class VentanaGestionLibreria(QMainWindow):
     
     Cada tarjeta contiene botones para las acciones específicas de esa sección.
     """
+    # Constantes para la vista de resultados tipo tabla
+    RESULT_TABLE_WIDTH = 600      # Ancho de una tabla de resultados completa (AUMENTADO)
+    HEADER_ROW_HEIGHT = 30       # Altura de la fila de cabecera
+    BOOK_ROW_HEIGHT = 40         # Altura de una fila de libro (reducida)
+    MAX_BOOK_ROWS_PER_TABLE = 10 # Máximo de filas de libros por tabla (ajustable)
+    CELL_SPACING = 5             # Espacio entre celdas en una fila
+    ROW_SPACING = 5              # Espacio entre filas en una tabla (entre cabecera y primera fila, y entre filas de datos)
+    TABLE_CELL_PADDING = 5       # Padding dentro de cada celda individual
+
     def __init__(self):
         """Inicializa la ventana principal."""
         super().__init__()
@@ -98,26 +108,40 @@ class VentanaGestionLibreria(QMainWindow):
         # Configurar fondo
         self.background_pixmap = QPixmap(BACKGROUND_IMAGE_PATH)
         
-        # Widget central
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        self.root_layout = QVBoxLayout(self.central_widget)
-        self.root_layout.setContentsMargins(20, 20, 20, 20)
+        # Widget central ahora será un QStackedWidget
+        self.stacked_widget = QStackedWidget()
+        self.setCentralWidget(self.stacked_widget)
+
+        # Crear el widget del menú principal (lo que antes era central_widget)
+        self.main_menu_widget = QWidget()
+        self.root_layout_main_menu = QVBoxLayout(self.main_menu_widget) # Layout para el contenido del menú
+        self.root_layout_main_menu.setContentsMargins(20, 20, 20, 20)
+        
+        # Crear el widget de resultados de búsqueda
+        self.search_results_widget = self._crear_vista_resultados_busqueda()
+
+        # Añadir los widgets al QStackedWidget
+        self.stacked_widget.addWidget(self.main_menu_widget)
+        self.stacked_widget.addWidget(self.search_results_widget)
 
         # Verificar si se pudo cargar la imagen de fondo
         if self.background_pixmap.isNull():
             print(f"ADVERTENCIA MUY IMPORTANTE: No se pudo cargar la imagen de fondo desde: {BACKGROUND_IMAGE_PATH}")
-            self.central_widget.setStyleSheet("QWidget { background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #D32F2F, stop:1 #FF5252); }")
-            error_label = QLabel(f"Error: No se pudo cargar '{BACKGROUND_IMAGE_PATH}'.\nVerifica la ruta y el archivo.", self.central_widget)
+            # Aplicar estilo de error al main_menu_widget en lugar del antiguo central_widget
+            self.main_menu_widget.setStyleSheet("QWidget { background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #D32F2F, stop:1 #FF5252); }")
+            error_label = QLabel(f"Error: No se pudo cargar '{BACKGROUND_IMAGE_PATH}'.\\nVerifica la ruta y el archivo.", self.main_menu_widget)
             error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             error_label.setStyleSheet("QLabel { color: white; font-size: 18px; background-color: transparent; }")
-            self.root_layout.addWidget(error_label, stretch=1)
+            self.root_layout_main_menu.addWidget(error_label, stretch=1)
         else:
-            self.central_widget.setStyleSheet("QWidget { background: transparent; }")
+            # El estilo de fondo transparente se aplica al main_menu_widget
+            self.main_menu_widget.setStyleSheet("QWidget { background: transparent; }")
+            # self.search_results_widget también debería ser transparente para ver el fondo de la ventana
+            self.search_results_widget.setStyleSheet("QWidget { background: transparent; }")
             self._setup_ui_normal()
 
     def _setup_ui_normal(self):
-        """Configura la interfaz de usuario normal (con fondo)."""
+        """Configura la interfaz de usuario normal (con fondo) en el main_menu_widget."""
         overall_content_widget = QWidget()
         layout_overall_content = QVBoxLayout(overall_content_widget)
         layout_overall_content.setContentsMargins(0, 0, 0, 0)
@@ -254,9 +278,9 @@ class VentanaGestionLibreria(QMainWindow):
         layout_overall_content.addWidget(cards_holder_widget)
         layout_overall_content.addStretch(1)
 
-        self.root_layout.addStretch(1)
-        self.root_layout.addWidget(overall_content_widget, 0, Qt.AlignmentFlag.AlignHCenter)
-        self.root_layout.addStretch(1)
+        self.root_layout_main_menu.addStretch(1) # Ahora se añade al layout del main_menu_widget
+        self.root_layout_main_menu.addWidget(overall_content_widget, 0, Qt.AlignmentFlag.AlignHCenter)
+        self.root_layout_main_menu.addStretch(1)
 
     def _crear_barra_busqueda(self, ancho: int):
         search_bar_container = QFrame()
@@ -300,6 +324,7 @@ class VentanaGestionLibreria(QMainWindow):
                 padding-left: 5px;
             }
         """)
+        self.search_input.returnPressed.connect(self._iniciar_busqueda) # Conectar returnPressed
         
         # Placeholder para el icono de menú (hamburguesa)
         # Usaremos un QLabel con texto por ahora, ya que no tenemos el icono exacto.
@@ -385,6 +410,290 @@ class VentanaGestionLibreria(QMainWindow):
 
         layout_tarjeta.addStretch(1)
         return tarjeta
+
+    def _crear_vista_resultados_busqueda(self):
+        """Crea el widget para la vista de resultados de búsqueda con columnas dinámicas."""
+        widget = QWidget() 
+        main_layout = QVBoxLayout(widget) 
+        main_layout.setContentsMargins(30, 30, 30, 30) 
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+
+        self.search_term_label = QLabel("Resultados para: ...")
+        font_resultados = QFont(self.font_family, FONTS["size_large"], QFont.Weight.Bold)
+        self.search_term_label.setFont(font_resultados)
+        self.search_term_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.search_term_label.setStyleSheet("QLabel { color: black; background-color: transparent; padding-bottom: 20px; }")
+        main_layout.addWidget(self.search_term_label)
+
+        self.results_scroll_area = QScrollArea()
+        self.results_scroll_area.setWidgetResizable(True) 
+        self.results_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.results_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff) 
+        self.results_scroll_area.setStyleSheet("QScrollArea { background-color: transparent; border: none; }")
+
+        self.results_content_widget = QWidget()
+        self.results_content_widget.setStyleSheet("QWidget { background-color: transparent; }")
+        self.results_columns_layout = QHBoxLayout(self.results_content_widget) 
+        self.results_columns_layout.setContentsMargins(0,0,0,0)
+        self.results_columns_layout.setSpacing(15) 
+        self.results_columns_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        
+        self.results_scroll_area.setWidget(self.results_content_widget)
+        main_layout.addWidget(self.results_scroll_area, 1)
+
+        self.no_results_label = QLabel("No se encontraron libros que coincidan con tu búsqueda.")
+        self.no_results_label.setFont(QFont(self.font_family, FONTS["size_medium"]))
+        self.no_results_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.no_results_label.setStyleSheet("QLabel { color: #555; background-color: transparent; }")
+        self.no_results_label.setWordWrap(True)
+        self.no_results_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        main_layout.addWidget(self.no_results_label)
+        self.no_results_label.hide()
+
+        self.boton_volver_menu = CustomButton(text="Volver al Menú Principal")
+        layout_boton = QHBoxLayout()
+        layout_boton.addStretch(1)
+        layout_boton.addWidget(self.boton_volver_menu)
+        layout_boton.addStretch(1)
+        main_layout.addLayout(layout_boton)
+        
+        self.boton_volver_menu.clicked.connect(self._mostrar_menu_principal_animado)
+
+        widget.setStyleSheet("background: transparent;")
+        return widget
+
+    def _iniciar_busqueda(self):
+        """Se llama cuando se presiona Enter en la barra de búsqueda."""
+        termino_busqueda = self.search_input.text().strip()
+        if termino_busqueda:
+            print(f"Buscando: {termino_busqueda}")
+            # Llamar al servicio para buscar libros
+            libros_encontrados = self.book_service.buscar_libros(termino_busqueda)
+            self._actualizar_display_resultados(libros_encontrados) # Actualizar la UI de resultados
+            self._mostrar_vista_busqueda_animado(termino_busqueda)
+        else:
+            print("Término de búsqueda vacío.")
+            # Opcional: podríamos limpiar la vista de resultados si el término es vacío
+            # y el usuario presiona enter, o simplemente no hacer nada.
+            # Por ahora, no hacemos nada si está vacío.
+
+    def _actualizar_display_resultados(self, libros: List[Dict[str, Any]]):
+        """Actualiza la vista de resultados con un layout de tablas con celdas individuales."""
+        while self.results_columns_layout.count():
+            item = self.results_columns_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        if not libros:
+            self.results_scroll_area.hide()
+            self.no_results_label.show()
+        else:
+            self.no_results_label.hide()
+            self.results_scroll_area.show()
+
+            current_table_frame = None
+            current_table_layout = None 
+            book_rows_in_current_table = 0
+            column_weights = [3, 2, 2]
+            headers = ["Título", "Autor", "Categoría"]
+
+            # Estilo base para las celdas (glassmorphism)
+            cell_style_sheet = f"""
+                QFrame {{
+                    background-color: rgba(255, 255, 255, 0.45); /* Fondo de celda glassmorphism */
+                    border-radius: 6px;
+                    border: 1px solid rgba(255, 255, 255, 0.6);
+                }}
+                QLabel {{
+                    background-color: transparent;
+                    border: none;
+                    padding: {self.TABLE_CELL_PADDING}px;
+                }}
+            """
+            header_cell_style_sheet = f"""
+                QFrame {{
+                    background-color: rgba(235, 235, 245, 0.6); /* Fondo de celda de cabecera un poco más opaco */
+                    border-radius: 6px;
+                    border: 1px solid rgba(255, 255, 255, 0.5);
+                }}
+                QLabel {{
+                    background-color: transparent;
+                    border: none;
+                    padding: {self.TABLE_CELL_PADDING}px;
+                    font-weight: bold;
+                }}
+            """
+
+            for i, libro_data in enumerate(libros):
+                if current_table_frame is None or book_rows_in_current_table >= self.MAX_BOOK_ROWS_PER_TABLE:
+                    current_table_frame = QFrame()
+                    current_table_frame.setFixedWidth(self.RESULT_TABLE_WIDTH)
+                    current_table_frame.setStyleSheet(f"""
+                        QFrame {{
+                            background-color: rgba(220, 220, 235, 0.35); /* Fondo general de la tabla más transparente */
+                            border-radius: 10px; 
+                            border: 1px solid rgba(255, 255, 255, 0.2);
+                        }}
+                    """) # Estilo del QFrame contenedor de la tabla
+                    current_table_layout = QVBoxLayout(current_table_frame)
+                    current_table_layout.setContentsMargins(self.ROW_SPACING, self.ROW_SPACING, self.ROW_SPACING, self.ROW_SPACING)
+                    current_table_layout.setSpacing(self.ROW_SPACING)
+                    current_table_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+                    self.results_columns_layout.addWidget(current_table_frame)
+                    book_rows_in_current_table = 0
+
+                    # --- Fila de Cabecera con Celdas Individuales ---
+                    header_row_widget = QWidget()
+                    header_row_widget.setFixedHeight(self.HEADER_ROW_HEIGHT)
+                    header_row_layout = QHBoxLayout(header_row_widget)
+                    header_row_layout.setContentsMargins(0,0,0,0)
+                    header_row_layout.setSpacing(self.CELL_SPACING)
+                    for h_text, weight in zip(headers, column_weights):
+                        cell_frame = QFrame()
+                        cell_frame.setStyleSheet(header_cell_style_sheet)
+                        cell_layout = QVBoxLayout(cell_frame) # Usar QVBoxLayout para centrar texto verticalmente si es necesario
+                        cell_layout.setContentsMargins(0,0,0,0)
+                        lbl = QLabel(h_text)
+                        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter) # Centrar texto en la celda
+                        lbl.setFont(QFont(self.font_family, FONTS["size_small"], QFont.Weight.Bold))
+                        lbl.setStyleSheet("color: #222; background-color:transparent;") # Color de texto cabecera
+                        cell_layout.addWidget(lbl)
+                        header_row_layout.addWidget(cell_frame, weight)
+                    current_table_layout.addWidget(header_row_widget)
+
+                # --- Fila de Libro con Celdas Individuales ---
+                book_row_widget = QWidget() 
+                book_row_widget.setFixedHeight(self.BOOK_ROW_HEIGHT)
+                book_row_layout = QHBoxLayout(book_row_widget)
+                book_row_layout.setContentsMargins(0,0,0,0)
+                book_row_layout.setSpacing(self.CELL_SPACING)
+
+                titulo = libro_data.get("Título", "N/A")
+                autor = libro_data.get("Autor", "N/A")
+                categorias_list = libro_data.get("Categorías", [])
+                categorias = ", ".join(categorias_list) if categorias_list else "-"
+                data_fields = [titulo, autor, categorias]
+
+                for field_text, weight in zip(data_fields, column_weights):
+                    cell_frame = QFrame()
+                    cell_frame.setStyleSheet(cell_style_sheet)
+                    cell_layout = QVBoxLayout(cell_frame)
+                    cell_layout.setContentsMargins(0,0,0,0)
+                    lbl = QLabel(field_text)
+                    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    lbl.setFont(QFont(self.font_family, FONTS["size_small"]-1))
+                    lbl.setWordWrap(True)
+                    lbl.setStyleSheet("color: #333; background-color:transparent;") # Color de texto datos
+                    cell_layout.addWidget(lbl)
+                    book_row_layout.addWidget(cell_frame, weight)
+                
+                current_table_layout.addWidget(book_row_widget)
+                book_rows_in_current_table += 1
+
+            if current_table_layout:
+                 current_table_layout.addStretch(1)
+            self.results_columns_layout.addStretch(1)
+
+    def _mostrar_vista_busqueda_animado(self, termino_busqueda):
+        """Muestra la vista de resultados de búsqueda con animación."""
+        current_widget = self.stacked_widget.currentWidget()
+        next_widget = self.search_results_widget
+
+        if current_widget == next_widget:
+            return
+
+        self.search_term_label.setText(f"Resultados para: \"{termino_busqueda}\"")
+
+        # 1. Posicionar next_widget fuera de la pantalla (a la derecha)
+        # Asegurarse de que tenga el tamaño correcto que tendrá en el stack.
+        # Usamos self.stacked_widget.rect() para obtener las dimensiones correctas.
+        rect_stacked = self.stacked_widget.rect()
+        next_widget.setGeometry(rect_stacked.width(), 0, rect_stacked.width(), rect_stacked.height())
+        
+        # 2. Hacer next_widget visible y ponerlo encima del widget actual
+        next_widget.show()
+        next_widget.raise_()
+
+        # 3. Animación para current_widget (sale hacia la izquierda)
+        # Usamos variables locales para las animaciones para evitar sobreescribir self.anim si se llama rápido
+        anim_current_slide_out = QPropertyAnimation(current_widget, b"geometry")
+        anim_current_slide_out.setDuration(500)
+        anim_current_slide_out.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        anim_current_slide_out.setStartValue(current_widget.geometry()) 
+        anim_current_slide_out.setEndValue(QRect(-current_widget.width(), 0, current_widget.width(), current_widget.height()))
+
+        # 4. Animación para next_widget (entra desde la derecha)
+        anim_next_slide_in = QPropertyAnimation(next_widget, b"geometry")
+        anim_next_slide_in.setDuration(500)
+        anim_next_slide_in.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        anim_next_slide_in.setStartValue(next_widget.geometry()) 
+        anim_next_slide_in.setEndValue(rect_stacked) 
+
+        # Guardar las animaciones como atributos de instancia si necesitamos cancelarlas o interactuar más tarde
+        self.current_animation_group = [anim_current_slide_out, anim_next_slide_in]
+
+        # 5. Cuando la animación de entrada termina:
+        def transition_finished():
+            self.stacked_widget.setCurrentWidget(next_widget) 
+            current_widget.hide() 
+            # Limpiar referencias para permitir recolección de basura si es necesario
+            self.current_animation_group = [] 
+            try:
+                anim_next_slide_in.finished.disconnect(transition_finished)
+            except RuntimeError: pass
+            # No necesitamos desconectar anim_current_slide_out.finished explícitamente si no tiene slots conectados
+
+        anim_next_slide_in.finished.connect(transition_finished)
+        
+        anim_current_slide_out.start()
+        anim_next_slide_in.start()
+        
+    def _mostrar_menu_principal_animado(self):
+        """Muestra el menú principal con animación."""
+        current_widget = self.stacked_widget.currentWidget() 
+        next_widget = self.main_menu_widget 
+
+        if current_widget == next_widget:
+            return
+
+        # 1. Posicionar next_widget (main_menu_widget) fuera de pantalla (a la izquierda)
+        rect_stacked = self.stacked_widget.rect()
+        next_widget.setGeometry(-rect_stacked.width(), 0, rect_stacked.width(), rect_stacked.height())
+        
+        # 2. Hacer next_widget visible y ponerlo encima
+        next_widget.show()
+        next_widget.raise_()
+
+        # 3. Animación para current_widget (search_results_widget) (sale hacia la derecha)
+        anim_current_slide_out_reverse = QPropertyAnimation(current_widget, b"geometry")
+        anim_current_slide_out_reverse.setDuration(500)
+        anim_current_slide_out_reverse.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        anim_current_slide_out_reverse.setStartValue(current_widget.geometry())
+        anim_current_slide_out_reverse.setEndValue(QRect(rect_stacked.width(), 0, current_widget.width(), current_widget.height()))
+
+        # 4. Animación para next_widget (main_menu_widget) (entra desde la izquierda)
+        anim_next_slide_in_reverse = QPropertyAnimation(next_widget, b"geometry")
+        anim_next_slide_in_reverse.setDuration(500)
+        anim_next_slide_in_reverse.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        anim_next_slide_in_reverse.setStartValue(next_widget.geometry()) 
+        anim_next_slide_in_reverse.setEndValue(rect_stacked)
+
+        self.current_animation_group = [anim_current_slide_out_reverse, anim_next_slide_in_reverse]
+
+        # 5. Cuando la animación de entrada termina:
+        def transition_reverse_finished():
+            self.stacked_widget.setCurrentWidget(next_widget)
+            current_widget.hide()
+            self.current_animation_group = []
+            try:
+                anim_next_slide_in_reverse.finished.disconnect(transition_reverse_finished)
+            except RuntimeError: pass
+
+        anim_next_slide_in_reverse.finished.connect(transition_reverse_finished)
+
+        anim_current_slide_out_reverse.start()
+        anim_next_slide_in_reverse.start()
 
     def paintEvent(self, event):
         """Maneja el evento de pintar para dibujar el fondo."""
