@@ -20,8 +20,8 @@ COLORS = {
     "text_disabled": "#909090",
     
     "background_transparent": "rgba(255, 255, 255, 80)",
-    "background_light": "rgba(248, 249, 250, 100)",
-    "background_medium": "rgba(240, 240, 240, 80)",
+    "background_light": "rgba(255, 255, 255, 150)",
+    "background_medium": "rgba(255, 255, 255, 130)",
     
     "accent_blue": "rgba(52, 152, 219, 180)",
     "accent_blue_hover": "rgba(41, 128, 185, 200)",

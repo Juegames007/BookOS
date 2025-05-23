@@ -8,10 +8,11 @@ que muestra el menú con las diferentes opciones disponibles para el usuario.
 import os
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-    QSizePolicy, QSpacerItem, QMessageBox, QFrame, QApplication
+    QSizePolicy, QSpacerItem, QMessageBox, QFrame, QApplication,
+    QLineEdit
 )
-from PySide6.QtGui import QFont, QPixmap, QPainter
-from PySide6.QtCore import Qt, QPoint
+from PySide6.QtGui import QFont, QPixmap, QPainter, QIcon
+from PySide6.QtCore import Qt, QPoint, QSize
 
 from app.dependencies import DependencyFactory
 from gui.common.widgets import CustomButton
@@ -74,6 +75,11 @@ class VentanaGestionLibreria(QMainWindow):
         self.setWindowTitle("Gestión Librería con PySide6")
         self.font_family = FONTS["family"]
 
+        # Obtener el servicio de libros
+        data_manager = DependencyFactory.get_data_manager()
+        book_info_service = DependencyFactory.get_book_info_service()
+        self.book_service = BookService(data_manager, book_info_service)
+
         # Configurar tamaño y posición inicial
         target_width = 1366  # Ancho suficiente para 3 columnas de 300px + espaciados
         target_height = 768
@@ -125,6 +131,7 @@ class VentanaGestionLibreria(QMainWindow):
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_label.setStyleSheet("QLabel { color: black; background-color: transparent; padding-bottom: 10px; }")
         layout_overall_content.addWidget(title_label)
+
         layout_overall_content.addSpacerItem(QSpacerItem(20, 60, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed))
 
         # Contenedor para las tarjetas
@@ -178,6 +185,11 @@ class VentanaGestionLibreria(QMainWindow):
         layout_finanzas_columna = QVBoxLayout(finanzas_columna_widget)
         layout_finanzas_columna.setContentsMargins(0, 0, 0, 0)
         layout_finanzas_columna.setSpacing(card_spacing)
+
+        # --- Barra de búsqueda para la columna de Finanzas ---
+        search_bar_widget_finanzas = self._crear_barra_busqueda(card_width) # Usar card_width
+        layout_finanzas_columna.addWidget(search_bar_widget_finanzas)
+        layout_finanzas_columna.addSpacerItem(QSpacerItem(20, card_spacing, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)) # Espacio entre barra y tarjeta
 
         opciones_finanzas_main = [
             {"icon": "vender.png", "text": "  Vender Libro", "action": "Vender Libro"},
@@ -245,6 +257,71 @@ class VentanaGestionLibreria(QMainWindow):
         self.root_layout.addStretch(1)
         self.root_layout.addWidget(overall_content_widget, 0, Qt.AlignmentFlag.AlignHCenter)
         self.root_layout.addStretch(1)
+
+    def _crear_barra_busqueda(self, ancho: int):
+        search_bar_container = QFrame()
+        search_bar_container.setObjectName("searchBarContainer")
+        search_bar_container.setFixedHeight(55)
+        search_bar_container.setFixedWidth(ancho)
+        search_bar_container.setStyleSheet(f"""
+            QFrame#searchBarContainer {{
+                background-color: rgba(255, 255, 255, 90);
+                border-radius: 15px;
+                border: 1px solid rgba(200, 200, 200, 100);
+            }}
+        """)
+
+        layout = QHBoxLayout(search_bar_container)
+        layout.setContentsMargins(15, 0, 15, 0)
+        layout.setSpacing(10)
+
+        # Icono de búsqueda
+        search_icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "imagenes", "buscar.png")
+        search_icon_label = QLabel()
+        if os.path.exists(search_icon_path):
+            search_pixmap = QPixmap(search_icon_path)
+            search_icon_label.setPixmap(search_pixmap.scaled(QSize(24,24), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        else:
+            search_icon_label.setText("?") # Placeholder si no hay icono
+            print(f"Advertencia: No se pudo cargar el icono de búsqueda en: {search_icon_path}")
+        search_icon_label.setStyleSheet("background-color: transparent; border: none;")
+
+
+        # Campo de texto para búsqueda
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search")
+        self.search_input.setFixedHeight(35)
+        self.search_input.setFont(QFont(self.font_family, FONTS["size_medium"]))
+        self.search_input.setStyleSheet("""
+            QLineEdit {
+                background-color: transparent;
+                border: none;
+                color: #333;
+                padding-left: 5px;
+            }
+        """)
+        
+        # Placeholder para el icono de menú (hamburguesa)
+        # Usaremos un QLabel con texto por ahora, ya que no tenemos el icono exacto.
+        # Este es el estilo de tres líneas horizontales (menú hamburguesa)
+        menu_icon_label = QLabel("≡") 
+        menu_icon_font = QFont(self.font_family, FONTS["size_large"], QFont.Weight.Bold)
+        menu_icon_label.setFont(menu_icon_font)
+        menu_icon_label.setStyleSheet("background-color: transparent; border: none; color: #555;")
+        menu_icon_label.setCursor(Qt.CursorShape.PointingHandCursor)
+
+
+        layout.addWidget(search_icon_label)
+        layout.addWidget(self.search_input, 1) # El 1 es para que el QLineEdit ocupe el espacio disponible
+        layout.addWidget(menu_icon_label)
+        
+        # Aplicar un ancho máximo al contenedor de la barra de búsqueda
+        # para que no se extienda demasiado en pantallas grandes
+        # Tomaremos un ancho un poco mayor que las tarjetas individuales
+        # search_bar_container.setFixedWidth(400) # Comentado/Eliminado: el ancho se pasa como argumento
+
+
+        return search_bar_container
 
     def _crear_tarjeta(self, titulo_str, opciones_data, ancho, alto, con_titulo=True):
         """
