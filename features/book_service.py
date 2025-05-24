@@ -33,47 +33,97 @@ class BookService:
         self.data_manager = data_manager
         self.book_info_service = book_info_service
     
-    def buscar_libro_por_isbn(self, isbn: str) -> Optional[Dict[str, Any]]:
+    def buscar_libro_por_isbn(self, isbn: str) -> Dict[str, Any]:
         """
-        Busca información de un libro por ISBN.
+        Busca información de un libro por ISBN, priorizando la base de datos local.
         
-        Primero intenta obtener la información desde una API externa.
-        Si no la encuentra, busca en la base de datos local.
-        
-        Args:
-            isbn: El ISBN del libro a buscar.
-            
-        Returns:
-            Un diccionario con la información del libro o None si no se encuentra.
+        Devuelve un diccionario con:
+        - 'status': "encontrado_completo" | "encontrado_en_libros" | "solo_api" | "no_encontrado"
+        - 'book_details': {...} (datos del libro de DB o API)
+        - 'inventory_entries': [{...}] (lista de entradas de inventario si se encontró en DB)
         """
-        # Buscar en APIs externas
-        book_data = self.book_info_service.extraer_info_json(isbn)
-        if book_data:
-            return book_data
-            
-        # Si no lo encuentra, buscar en la base de datos local
-        query = """
-            SELECT isbn, titulo, autor, editorial, imagen_url AS Imagen, 
-                   categorias, precio_venta AS Precio
+        # 1. Buscar en la tabla 'libros'
+        query_libros = """
+            SELECT isbn, titulo, autor, editorial, imagen_url, categorias, precio_venta
             FROM libros 
             WHERE isbn = ?
         """
-        results = self.data_manager.fetch_query(query, (isbn,))
+        db_book_results = self.data_manager.fetch_query(query_libros, (isbn,))
         
-        if results and len(results) > 0:
-            # Convertir el resultado de la base de datos al formato esperado
-            db_book = results[0]
-            return {
+        book_details_from_db = None
+        if db_book_results and len(db_book_results) > 0:
+            db_book = db_book_results[0]
+            book_details_from_db = {
                 "ISBN": db_book["isbn"],
                 "Título": db_book["titulo"],
                 "Autor": db_book["autor"],
                 "Editorial": db_book["editorial"],
-                "Imagen": db_book.get("Imagen", ""),
+                "Imagen": db_book.get("imagen_url", ""), # Usar imagen_url directamente
                 "Categorías": db_book["categorias"].split(",") if db_book["categorias"] else [],
-                "Precio": db_book.get("Precio", 0)
+                "Precio": db_book.get("precio_venta", 0) # Usar precio_venta directamente
+            }
+
+        # 2. Si se encontró en 'libros', buscar en 'inventario'
+        inventory_entries = []
+        if book_details_from_db:
+            query_inventario = """
+                SELECT posicion, cantidad, libro_isbn
+                FROM inventario
+                WHERE libro_isbn = ?
+                ORDER BY posicion
+            """
+            # Nota: El precio en la tabla inventario podría ser diferente al de la tabla libros
+            # Por ahora, el precio que se mostrará en el diálogo será el de la tabla 'libros' (book_details_from_db["Precio"])
+            # Si se necesita el precio específico del inventario, habría que añadirlo a la consulta y al resultado.
+            db_inventory_results = self.data_manager.fetch_query(query_inventario, (isbn,))
+            for inv_entry in db_inventory_results:
+                inventory_entries.append({
+                    "posicion": inv_entry["posicion"],
+                    "cantidad": inv_entry["cantidad"],
+                    "precio_venta_registrado": book_details_from_db["Precio"] # Usar el precio de la tabla libros por ahora
+                })
+            
+            if inventory_entries:
+                return {
+                    "status": "encontrado_completo",
+                    "book_details": book_details_from_db,
+                    "inventory_entries": inventory_entries
+                }
+            else:
+                return {
+                    "status": "encontrado_en_libros", # Encontrado en tabla libros, pero no en inventario
+                    "book_details": book_details_from_db,
+                    "inventory_entries": []
+                }
+
+        # 3. Si no se encontró en la base de datos local, buscar en APIs externas
+        api_book_data = self.book_info_service.extraer_info_json(isbn)
+        if api_book_data:
+            # Adaptar los nombres de campo si es necesario para que coincidan con book_details_from_db
+            # Asumiendo que extraer_info_json ya devuelve un formato similar o lo adaptamos aquí.
+            # Por ejemplo, si la API devuelve 'price' en lugar de 'Precio'.
+            # Ejemplo de adaptación (ajustar según la salida real de extraer_info_json):
+            adapted_api_data = {
+                "ISBN": api_book_data.get("ISBN", isbn),
+                "Título": api_book_data.get("Título", api_book_data.get("title", "")),
+                "Autor": api_book_data.get("Autor", ", ".join(api_book_data.get("authors", []))),
+                "Editorial": api_book_data.get("Editorial", api_book_data.get("publisher", "")),
+                "Imagen": api_book_data.get("Imagen", api_book_data.get("thumbnail", "")),
+                "Categorías": api_book_data.get("Categorías", api_book_data.get("categories", [])),
+                "Precio": api_book_data.get("Precio", 0) # La API podría no dar precio, o necesitar conversión
+            }
+            return {
+                "status": "solo_api",
+                "book_details": adapted_api_data,
+                "inventory_entries": []
             }
             
-        return None
+        # 4. Si no se encuentra en ningún lado
+        return {
+            "status": "no_encontrado",
+            "book_details": None,
+            "inventory_entries": []
+        }
     
     def guardar_libro(self, book_info: Dict[str, Any]) -> Tuple[bool, str]:
         """

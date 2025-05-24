@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QStackedWidget, QListWidget, QAbstractScrollArea, QScrollArea
 )
 from PySide6.QtGui import QFont, QPixmap, QPainter, QIcon
-from PySide6.QtCore import Qt, QPoint, QSize, QEasingCurve, QPropertyAnimation, QRect
+from PySide6.QtCore import Qt, QPoint, QSize, QEasingCurve, QPropertyAnimation, QRect, QTimer, QEvent
 from typing import List, Dict, Any
 
 from app.dependencies import DependencyFactory
@@ -78,6 +78,7 @@ class VentanaGestionLibreria(QMainWindow):
     CELL_SPACING = 5             # Espacio entre celdas en una fila
     ROW_SPACING = 5              # Espacio entre filas en una tabla (entre cabecera y primera fila, y entre filas de datos)
     TABLE_CELL_PADDING = 5       # Padding dentro de cada celda individual
+    INACTIVITY_TIMEOUT_MS = 60000  # 1 minuto
 
     def __init__(self):
         """Inicializa la ventana principal."""
@@ -139,6 +140,14 @@ class VentanaGestionLibreria(QMainWindow):
             # self.search_results_widget también debería ser transparente para ver el fondo de la ventana
             self.search_results_widget.setStyleSheet("QWidget { background: transparent; }")
             self._setup_ui_normal()
+
+        # Timer de inactividad
+        self.inactivity_timer = QTimer(self)
+        self.inactivity_timer.setInterval(self.INACTIVITY_TIMEOUT_MS)
+        self.inactivity_timer.timeout.connect(self._mostrar_menu_principal_animado)
+        self.inactivity_timer.start()
+        # Instalar filtro de eventos para detectar actividad
+        self.installEventFilter(self)
 
     def _setup_ui_normal(self):
         """Configura la interfaz de usuario normal (con fondo) en el main_menu_widget."""
@@ -413,7 +422,7 @@ class VentanaGestionLibreria(QMainWindow):
 
     def _crear_vista_resultados_busqueda(self):
         """Crea el widget para la vista de resultados de búsqueda con columnas dinámicas."""
-        widget = QWidget() 
+        widget = QWidget()
         main_layout = QVBoxLayout(widget) 
         main_layout.setContentsMargins(30, 30, 30, 30) 
         main_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
@@ -478,7 +487,7 @@ class VentanaGestionLibreria(QMainWindow):
             # Por ahora, no hacemos nada si está vacío.
 
     def _actualizar_display_resultados(self, libros: List[Dict[str, Any]]):
-        """Actualiza la vista de resultados con un layout de tablas con celdas individuales."""
+        """Actualiza la vista de resultados con un layout de tablas con celdas individuales y numeración."""
         while self.results_columns_layout.count():
             item = self.results_columns_layout.takeAt(0)
             widget = item.widget()
@@ -495,13 +504,14 @@ class VentanaGestionLibreria(QMainWindow):
             current_table_frame = None
             current_table_layout = None 
             book_rows_in_current_table = 0
-            column_weights = [3, 2, 2]
-            headers = ["Título", "Autor", "Categoría"]
+            # Reducir el peso de la columna de numeración en proporción
+            column_weights = [1, 5, 4, 4] # Antes: [1, 3, 2, 2]
+            headers = ["#", "Título", "Autor", "Categoría"]
 
             # Estilo base para las celdas (glassmorphism)
             cell_style_sheet = f"""
                 QFrame {{
-                    background-color: rgba(255, 255, 255, 0.45); /* Fondo de celda glassmorphism */
+                    background-color: rgba(255, 255, 255, 0.45);
                     border-radius: 6px;
                     border: 1px solid rgba(255, 255, 255, 0.6);
                 }}
@@ -513,7 +523,7 @@ class VentanaGestionLibreria(QMainWindow):
             """
             header_cell_style_sheet = f"""
                 QFrame {{
-                    background-color: rgba(235, 235, 245, 0.6); /* Fondo de celda de cabecera un poco más opaco */
+                    background-color: rgba(235, 235, 245, 0.6);
                     border-radius: 6px;
                     border: 1px solid rgba(255, 255, 255, 0.5);
                 }}
@@ -531,11 +541,11 @@ class VentanaGestionLibreria(QMainWindow):
                     current_table_frame.setFixedWidth(self.RESULT_TABLE_WIDTH)
                     current_table_frame.setStyleSheet(f"""
                         QFrame {{
-                            background-color: rgba(220, 220, 235, 0.35); /* Fondo general de la tabla más transparente */
+                            background-color: rgba(220, 220, 235, 0.35);
                             border-radius: 10px; 
                             border: 1px solid rgba(255, 255, 255, 0.2);
                         }}
-                    """) # Estilo del QFrame contenedor de la tabla
+                    """)
                     current_table_layout = QVBoxLayout(current_table_frame)
                     current_table_layout.setContentsMargins(self.ROW_SPACING, self.ROW_SPACING, self.ROW_SPACING, self.ROW_SPACING)
                     current_table_layout.setSpacing(self.ROW_SPACING)
@@ -552,12 +562,12 @@ class VentanaGestionLibreria(QMainWindow):
                     for h_text, weight in zip(headers, column_weights):
                         cell_frame = QFrame()
                         cell_frame.setStyleSheet(header_cell_style_sheet)
-                        cell_layout = QVBoxLayout(cell_frame) # Usar QVBoxLayout para centrar texto verticalmente si es necesario
+                        cell_layout = QVBoxLayout(cell_frame)
                         cell_layout.setContentsMargins(0,0,0,0)
                         lbl = QLabel(h_text)
-                        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter) # Centrar texto en la celda
+                        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
                         lbl.setFont(QFont(self.font_family, FONTS["size_small"], QFont.Weight.Bold))
-                        lbl.setStyleSheet("color: #222; background-color:transparent;") # Color de texto cabecera
+                        lbl.setStyleSheet("color: #222; background-color:transparent;")
                         cell_layout.addWidget(lbl)
                         header_row_layout.addWidget(cell_frame, weight)
                     current_table_layout.addWidget(header_row_widget)
@@ -569,11 +579,13 @@ class VentanaGestionLibreria(QMainWindow):
                 book_row_layout.setContentsMargins(0,0,0,0)
                 book_row_layout.setSpacing(self.CELL_SPACING)
 
+                # Numeración
+                numero = i + 1
                 titulo = libro_data.get("Título", "N/A")
                 autor = libro_data.get("Autor", "N/A")
                 categorias_list = libro_data.get("Categorías", [])
                 categorias = ", ".join(categorias_list) if categorias_list else "-"
-                data_fields = [titulo, autor, categorias]
+                data_fields = [str(numero), titulo, autor, categorias]
 
                 for field_text, weight in zip(data_fields, column_weights):
                     cell_frame = QFrame()
@@ -584,7 +596,7 @@ class VentanaGestionLibreria(QMainWindow):
                     lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
                     lbl.setFont(QFont(self.font_family, FONTS["size_small"]-1))
                     lbl.setWordWrap(True)
-                    lbl.setStyleSheet("color: #333; background-color:transparent;") # Color de texto datos
+                    lbl.setStyleSheet("color: #333; background-color:transparent;")
                     cell_layout.addWidget(lbl)
                     book_row_layout.addWidget(cell_frame, weight)
                 
@@ -593,7 +605,6 @@ class VentanaGestionLibreria(QMainWindow):
 
             if current_table_layout:
                  current_table_layout.addStretch(1)
-            self.results_columns_layout.addStretch(1)
 
     def _mostrar_vista_busqueda_animado(self, termino_busqueda):
         """Muestra la vista de resultados de búsqueda con animación."""
@@ -711,5 +722,25 @@ class VentanaGestionLibreria(QMainWindow):
 
     def resizeEvent(self, event):
         """Maneja el evento de redimensionamiento."""
-        self.update()
         super().resizeEvent(event) 
+        # Centrado real del recuadro de resultados
+        if hasattr(self, 'results_scroll_area') and hasattr(self, 'results_content_widget'):
+            scroll_width = self.results_scroll_area.viewport().width()
+            self.results_content_widget.setMinimumWidth(scroll_width)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self._mostrar_menu_principal_animado()
+        super().keyPressEvent(event)
+
+    def eventFilter(self, obj, event):
+        # Reinicia el temporizador de inactividad en cualquier evento de mouse o teclado
+        if event.type() in [
+            QEvent.Type.MouseMove,
+            QEvent.Type.KeyPress,
+            QEvent.Type.MouseButtonPress,
+            QEvent.Type.MouseButtonRelease
+        ]:
+            if self.inactivity_timer.isActive(): # Solo reiniciar si está activo
+                self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS) # Reinicia con el intervalo completo
+        return super().eventFilter(obj, event) 
