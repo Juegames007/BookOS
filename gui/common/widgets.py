@@ -95,14 +95,19 @@ class CustomButton(QFrame):
         font_botones = QFont(self.font_family, 11)
         self.text_label.setFont(font_botones)
 
-        self.arrow_label = QLabel(">")
-        self.arrow_label.setFont(font_botones)
-        self.arrow_label.setFixedWidth(self.arrow_label.fontMetrics().horizontalAdvance("> ") + 5)
-
         layout.addWidget(self.icon_label)
         layout.addWidget(self.text_label)
         layout.addStretch(1)
-        layout.addWidget(self.arrow_label)
+
+        if not icon_path: # Solo añadir la flecha si NO hay icono
+            self.arrow_label = QLabel("")
+            self.arrow_label.setFont(font_botones)
+            # Asegurar que self.arrow_label esté definido antes de usar fontMetrics en él
+            # y solo calcular el ancho si se va a mostrar.
+            self.arrow_label.setFixedWidth(self.arrow_label.fontMetrics().horizontalAdvance("> ") + 5)
+            layout.addWidget(self.arrow_label)
+        else:
+            self.arrow_label = None # Asegurarse de que no exista o esté vacío
 
     def enterEvent(self, event):
         """Se activa cuando el cursor entra en el botón."""

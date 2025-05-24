@@ -74,7 +74,8 @@ class VentanaGestionLibreria(QMainWindow):
     RESULT_TABLE_WIDTH = 600      # Ancho de una tabla de resultados completa (AUMENTADO)
     HEADER_ROW_HEIGHT = 30       # Altura de la fila de cabecera
     BOOK_ROW_HEIGHT = 40         # Altura de una fila de libro (reducida)
-    MAX_BOOK_ROWS_PER_TABLE = 10 # Máximo de filas de libros por tabla (ajustable)
+    MAX_BOOK_ROWS_PER_TABLE = 12 # Máximo de filas de libros por tabla (ajustable AHORA 12)
+    TABLES_PER_PAGE = 2          # Número de tablas de resultados por página
     CELL_SPACING = 5             # Espacio entre celdas en una fila
     ROW_SPACING = 5              # Espacio entre filas en una tabla (entre cabecera y primera fila, y entre filas de datos)
     TABLE_CELL_PADDING = 5       # Padding dentro de cada celda individual
@@ -90,6 +91,14 @@ class VentanaGestionLibreria(QMainWindow):
         data_manager = DependencyFactory.get_data_manager()
         book_info_service = DependencyFactory.get_book_info_service()
         self.book_service = BookService(data_manager, book_info_service)
+
+        # Atributos para paginación de resultados
+        self.current_results_page_index = 0
+        self.total_results_pages = 0
+        self.results_pages_stack = None # Se inicializará en _crear_vista_resultados_busqueda
+        self.boton_anterior_resultados = None
+        self.boton_siguiente_resultados = None
+        self.current_results_animation_group = [] # Para animaciones de páginas de resultados
 
         # Configurar tamaño y posición inicial
         target_width = 1366  # Ancho suficiente para 3 columnas de 300px + espaciados
@@ -222,7 +231,6 @@ class VentanaGestionLibreria(QMainWindow):
         # --- Barra de búsqueda para la columna de Finanzas ---
         search_bar_widget_finanzas = self._crear_barra_busqueda(card_width) # Usar card_width
         layout_finanzas_columna.addWidget(search_bar_widget_finanzas)
-        layout_finanzas_columna.addSpacerItem(QSpacerItem(20, card_spacing, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)) # Espacio entre barra y tarjeta
 
         opciones_finanzas_main = [
             {"icon": "vender.png", "text": "  Vender Libro", "action": "Vender Libro"},
@@ -434,21 +442,10 @@ class VentanaGestionLibreria(QMainWindow):
         self.search_term_label.setStyleSheet("QLabel { color: black; background-color: transparent; padding-bottom: 20px; }")
         main_layout.addWidget(self.search_term_label)
 
-        self.results_scroll_area = QScrollArea()
-        self.results_scroll_area.setWidgetResizable(True) 
-        self.results_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.results_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff) 
-        self.results_scroll_area.setStyleSheet("QScrollArea { background-color: transparent; border: none; }")
-
-        self.results_content_widget = QWidget()
-        self.results_content_widget.setStyleSheet("QWidget { background-color: transparent; }")
-        self.results_columns_layout = QHBoxLayout(self.results_content_widget) 
-        self.results_columns_layout.setContentsMargins(0,0,0,0)
-        self.results_columns_layout.setSpacing(15) 
-        self.results_columns_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-        
-        self.results_scroll_area.setWidget(self.results_content_widget)
-        main_layout.addWidget(self.results_scroll_area, 1)
+        # Contenedor principal para las páginas de resultados (reemplaza QScrollArea)
+        self.results_pages_stack = QStackedWidget()
+        self.results_pages_stack.setStyleSheet("background-color: transparent;") # Para que se vea el fondo de la ventana
+        main_layout.addWidget(self.results_pages_stack, 1)
 
         self.no_results_label = QLabel("No se encontraron libros que coincidan con tu búsqueda.")
         self.no_results_label.setFont(QFont(self.font_family, FONTS["size_medium"]))
@@ -459,14 +456,36 @@ class VentanaGestionLibreria(QMainWindow):
         main_layout.addWidget(self.no_results_label)
         self.no_results_label.hide()
 
-        self.boton_volver_menu = CustomButton(text="Volver al Menú Principal")
-        layout_boton = QHBoxLayout()
-        layout_boton.addStretch(1)
-        layout_boton.addWidget(self.boton_volver_menu)
-        layout_boton.addStretch(1)
-        main_layout.addLayout(layout_boton)
+        # Layout para botones de navegación de resultados y botón de volver al menú
+        navigation_and_back_layout = QHBoxLayout()
         
+        # Construir rutas a los iconos
+        icon_base_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "imagenes")
+        anterior_icon_path = os.path.join(icon_base_path, "anterior.png")
+        siguiente_icon_path = os.path.join(icon_base_path, "siguiente.png")
+
+        self.boton_anterior_resultados = CustomButton(icon_path=anterior_icon_path, text="") # Usar icono y texto vacío
+        self.boton_anterior_resultados.clicked.connect(self._ir_a_pagina_anterior_resultados)
+        self.boton_anterior_resultados.setEnabled(False) # Inicialmente deshabilitado
+        # Podríamos querer ajustar el tamaño fijo si los iconos son muy grandes/pequeños
+        # self.boton_anterior_resultados.setFixedSize(QSize(40, 40)) # Ejemplo de tamaño
+        navigation_and_back_layout.addWidget(self.boton_anterior_resultados)
+
+        navigation_and_back_layout.addStretch(1) # Espaciador central
+
+        self.boton_volver_menu = CustomButton(text="Volver al Menú Principal")
         self.boton_volver_menu.clicked.connect(self._mostrar_menu_principal_animado)
+        navigation_and_back_layout.addWidget(self.boton_volver_menu)
+
+        navigation_and_back_layout.addStretch(1) # Espaciador central
+
+        self.boton_siguiente_resultados = CustomButton(icon_path=siguiente_icon_path, text="") # Usar icono y texto vacío
+        self.boton_siguiente_resultados.clicked.connect(self._ir_a_pagina_siguiente_resultados)
+        self.boton_siguiente_resultados.setEnabled(False) # Inicialmente deshabilitado
+        # self.boton_siguiente_resultados.setFixedSize(QSize(40, 40)) # Ejemplo de tamaño
+        navigation_and_back_layout.addWidget(self.boton_siguiente_resultados)
+        
+        main_layout.addLayout(navigation_and_back_layout)
 
         widget.setStyleSheet("background: transparent;")
         return widget
@@ -487,28 +506,30 @@ class VentanaGestionLibreria(QMainWindow):
             # Por ahora, no hacemos nada si está vacío.
 
     def _actualizar_display_resultados(self, libros: List[Dict[str, Any]]):
-        """Actualiza la vista de resultados con un layout de tablas con celdas individuales y numeración."""
-        while self.results_columns_layout.count():
-            item = self.results_columns_layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
+        """Actualiza la vista de resultados creando páginas de tablas y gestionando la navegación."""
+        # Limpiar páginas antiguas del stack
+        while self.results_pages_stack.count():
+            widget = self.results_pages_stack.widget(0)
+            self.results_pages_stack.removeWidget(widget)
+            if widget:
                 widget.deleteLater()
 
+        self.current_results_page_index = 0
+        self.total_results_pages = 0
+
         if not libros:
-            self.results_scroll_area.hide()
+            self.results_pages_stack.hide()
             self.no_results_label.show()
+            self.boton_anterior_resultados.hide()
+            self.boton_siguiente_resultados.hide()
         else:
             self.no_results_label.hide()
-            self.results_scroll_area.show()
+            self.results_pages_stack.show()
+            self.boton_anterior_resultados.show()
+            self.boton_siguiente_resultados.show()
 
-            current_table_frame = None
-            current_table_layout = None 
-            book_rows_in_current_table = 0
-            # Reducir el peso de la columna de numeración en proporción
-            column_weights = [1, 5, 4, 4] # Antes: [1, 3, 2, 2]
+            column_weights = [1, 5, 4, 4]
             headers = ["#", "Título", "Autor", "Categoría"]
-
-            # Estilo base para las celdas (glassmorphism)
             cell_style_sheet = f"""
                 QFrame {{
                     background-color: rgba(255, 255, 255, 0.45);
@@ -535,24 +556,30 @@ class VentanaGestionLibreria(QMainWindow):
                 }}
             """
 
-            for i, libro_data in enumerate(libros):
-                if current_table_frame is None or book_rows_in_current_table >= self.MAX_BOOK_ROWS_PER_TABLE:
+            num_libros = len(libros)
+            libros_por_pagina = self.MAX_BOOK_ROWS_PER_TABLE * self.TABLES_PER_PAGE
+            self.total_results_pages = (num_libros + libros_por_pagina - 1) // libros_por_pagina
+
+            libro_idx_global = 0
+            for page_num in range(self.total_results_pages):
+                page_widget = QWidget()
+                page_layout = QHBoxLayout(page_widget)
+                page_layout.setContentsMargins(0, 0, 0, 0)
+                page_layout.setSpacing(15) # Espacio entre tablas en una página
+                page_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+
+                for table_in_page_num in range(self.TABLES_PER_PAGE):
+                    if libro_idx_global >= num_libros:
+                        # Si no hay más libros para llenar los slots de esta página, salimos del loop de tablas.
+                        break 
+                    
                     current_table_frame = QFrame()
                     current_table_frame.setFixedWidth(self.RESULT_TABLE_WIDTH)
-                    current_table_frame.setStyleSheet(f"""
-                        QFrame {{
-                            background-color: rgba(220, 220, 235, 0.35);
-                            border-radius: 10px; 
-                            border: 1px solid rgba(255, 255, 255, 0.2);
-                        }}
-                    """)
                     current_table_layout = QVBoxLayout(current_table_frame)
                     current_table_layout.setContentsMargins(self.ROW_SPACING, self.ROW_SPACING, self.ROW_SPACING, self.ROW_SPACING)
                     current_table_layout.setSpacing(self.ROW_SPACING)
                     current_table_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-                    self.results_columns_layout.addWidget(current_table_frame)
-                    book_rows_in_current_table = 0
-
+                    
                     # --- Fila de Cabecera con Celdas Individuales ---
                     header_row_widget = QWidget()
                     header_row_widget.setFixedHeight(self.HEADER_ROW_HEIGHT)
@@ -572,39 +599,138 @@ class VentanaGestionLibreria(QMainWindow):
                         header_row_layout.addWidget(cell_frame, weight)
                     current_table_layout.addWidget(header_row_widget)
 
-                # --- Fila de Libro con Celdas Individuales ---
-                book_row_widget = QWidget() 
-                book_row_widget.setFixedHeight(self.BOOK_ROW_HEIGHT)
-                book_row_layout = QHBoxLayout(book_row_widget)
-                book_row_layout.setContentsMargins(0,0,0,0)
-                book_row_layout.setSpacing(self.CELL_SPACING)
+                    book_rows_in_current_table = 0
+                    while book_rows_in_current_table < self.MAX_BOOK_ROWS_PER_TABLE and libro_idx_global < num_libros:
+                        libro_data = libros[libro_idx_global]
+                        book_row_widget = QWidget() 
+                        book_row_widget.setFixedHeight(self.BOOK_ROW_HEIGHT)
+                        book_row_layout = QHBoxLayout(book_row_widget)
+                        book_row_layout.setContentsMargins(0,0,0,0)
+                        book_row_layout.setSpacing(self.CELL_SPACING)
 
-                # Numeración
-                numero = i + 1
-                titulo = libro_data.get("Título", "N/A")
-                autor = libro_data.get("Autor", "N/A")
-                categorias_list = libro_data.get("Categorías", [])
-                categorias = ", ".join(categorias_list) if categorias_list else "-"
-                data_fields = [str(numero), titulo, autor, categorias]
+                        numero = libro_idx_global + 1
+                        titulo = libro_data.get("Título", "N/A")
+                        autor = libro_data.get("Autor", "N/A")
+                        categorias_list = libro_data.get("Categorías", [])
+                        categorias = ", ".join(categorias_list) if categorias_list else "-"
+                        data_fields = [str(numero), titulo, autor, categorias]
 
-                for field_text, weight in zip(data_fields, column_weights):
-                    cell_frame = QFrame()
-                    cell_frame.setStyleSheet(cell_style_sheet)
-                    cell_layout = QVBoxLayout(cell_frame)
-                    cell_layout.setContentsMargins(0,0,0,0)
-                    lbl = QLabel(field_text)
-                    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    lbl.setFont(QFont(self.font_family, FONTS["size_small"]-1))
-                    lbl.setWordWrap(True)
-                    lbl.setStyleSheet("color: #333; background-color:transparent;")
-                    cell_layout.addWidget(lbl)
-                    book_row_layout.addWidget(cell_frame, weight)
+                        for field_text, weight in zip(data_fields, column_weights):
+                            cell_frame = QFrame()
+                            cell_frame.setStyleSheet(cell_style_sheet)
+                            cell_layout = QVBoxLayout(cell_frame)
+                            cell_layout.setContentsMargins(0,0,0,0)
+                            lbl = QLabel(field_text)
+                            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                            lbl.setFont(QFont(self.font_family, FONTS["size_small"]-1))
+                            lbl.setWordWrap(True)
+                            lbl.setStyleSheet("color: #333; background-color:transparent;")
+                            cell_layout.addWidget(lbl)
+                            book_row_layout.addWidget(cell_frame, weight)
+                        
+                        current_table_layout.addWidget(book_row_widget)
+                        book_rows_in_current_table += 1
+                        libro_idx_global += 1
+                    
+                    current_table_layout.addStretch(1) # Estirar al final de la tabla
+                    page_layout.addWidget(current_table_frame) 
                 
-                current_table_layout.addWidget(book_row_widget)
-                book_rows_in_current_table += 1
+                # Si la página tiene al menos una tabla, añadirla al stack.
+                if page_layout.count() > 0: 
+                     self.results_pages_stack.addWidget(page_widget)
+                else:
+                    # Si esta página quedó vacía (no debería pasar si total_results_pages se calculó bien
+                    # y los libros se distribuyeron), no se añade.
+                    # El total_results_pages se ajustará al final basado en los widgets realmente añadidos.
+                    pass
 
-            if current_table_layout:
-                 current_table_layout.addStretch(1)
+            # Actualizar total_results_pages basado en las páginas realmente añadidas
+            self.total_results_pages = self.results_pages_stack.count()
+
+            if self.total_results_pages > 0:
+                self.results_pages_stack.setCurrentIndex(0)
+            
+            self._actualizar_estado_botones_navegacion_resultados()
+
+    def _actualizar_estado_botones_navegacion_resultados(self):
+        if not self.results_pages_stack or self.total_results_pages == 0:
+            self.boton_anterior_resultados.setEnabled(False)
+            self.boton_anterior_resultados.hide()
+            self.boton_siguiente_resultados.setEnabled(False)
+            self.boton_siguiente_resultados.hide()
+            return
+
+        self.boton_anterior_resultados.show()
+        self.boton_siguiente_resultados.show()
+        self.boton_anterior_resultados.setEnabled(self.current_results_page_index > 0)
+        self.boton_siguiente_resultados.setEnabled(self.current_results_page_index < self.total_results_pages - 1)
+
+    def _ir_a_pagina_siguiente_resultados(self):
+        if self.current_results_page_index < self.total_results_pages - 1:
+            nuevo_indice = self.current_results_page_index + 1
+            self._mostrar_pagina_resultados_animado(nuevo_indice, direccion_forward=True)
+
+    def _ir_a_pagina_anterior_resultados(self):
+        if self.current_results_page_index > 0:
+            nuevo_indice = self.current_results_page_index - 1
+            self._mostrar_pagina_resultados_animado(nuevo_indice, direccion_forward=False)
+
+    def _mostrar_pagina_resultados_animado(self, nuevo_indice: int, direccion_forward: bool):
+        current_page_widget = self.results_pages_stack.widget(self.current_results_page_index)
+        next_page_widget = self.results_pages_stack.widget(nuevo_indice)
+
+        if not current_page_widget or not next_page_widget or current_page_widget == next_page_widget:
+            if next_page_widget: # Si es la misma página o algo raro, solo asegurar el índice
+                 self.results_pages_stack.setCurrentWidget(next_page_widget)
+                 self.current_results_page_index = nuevo_indice
+                 self._actualizar_estado_botones_navegacion_resultados()
+            return
+
+        rect_stacked = self.results_pages_stack.rect() 
+
+        # Posicionar la nueva página fuera de la pantalla
+        if direccion_forward:
+            next_page_widget.setGeometry(rect_stacked.width(), 0, rect_stacked.width(), rect_stacked.height())
+        else:
+            next_page_widget.setGeometry(-rect_stacked.width(), 0, rect_stacked.width(), rect_stacked.height())
+        
+        next_page_widget.show()
+        next_page_widget.raise_()
+
+        # Animación para la página actual (deslizándose hacia afuera)
+        anim_current_page_slide_out = QPropertyAnimation(current_page_widget, b"geometry")
+        anim_current_page_slide_out.setDuration(350) # Duración más corta para paginación
+        anim_current_page_slide_out.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        anim_current_page_slide_out.setStartValue(current_page_widget.geometry())
+        end_x_current = -rect_stacked.width() if direccion_forward else rect_stacked.width()
+        anim_current_page_slide_out.setEndValue(QRect(end_x_current, 0, current_page_widget.width(), current_page_widget.height()))
+
+        # Animación para la nueva página (deslizándose hacia adentro)
+        anim_next_page_slide_in = QPropertyAnimation(next_page_widget, b"geometry")
+        anim_next_page_slide_in.setDuration(350)
+        anim_next_page_slide_in.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        anim_next_page_slide_in.setStartValue(next_page_widget.geometry())
+        anim_next_page_slide_in.setEndValue(rect_stacked)
+
+        # Limpiar animaciones anteriores si existen
+        for anim in self.current_results_animation_group:
+            anim.stop()
+        self.current_results_animation_group = [anim_current_page_slide_out, anim_next_page_slide_in]
+
+        def transition_finished():
+            current_page_widget.hide()
+            self.results_pages_stack.setCurrentWidget(next_page_widget)
+            self.current_results_page_index = nuevo_indice
+            self._actualizar_estado_botones_navegacion_resultados()
+            self.current_results_animation_group = []
+            try:
+                anim_next_page_slide_in.finished.disconnect(transition_finished)
+            except RuntimeError: pass
+
+        anim_next_page_slide_in.finished.connect(transition_finished)
+
+        anim_current_page_slide_out.start()
+        anim_next_page_slide_in.start()
 
     def _mostrar_vista_busqueda_animado(self, termino_busqueda):
         """Muestra la vista de resultados de búsqueda con animación."""
@@ -653,7 +779,9 @@ class VentanaGestionLibreria(QMainWindow):
             try:
                 anim_next_slide_in.finished.disconnect(transition_finished)
             except RuntimeError: pass
-            # No necesitamos desconectar anim_current_slide_out.finished explícitamente si no tiene slots conectados
+            # Reiniciar el temporizador de inactividad al mostrar la vista de búsqueda
+            if self.inactivity_timer.isActive():
+                self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS)
 
         anim_next_slide_in.finished.connect(transition_finished)
         
@@ -700,6 +828,15 @@ class VentanaGestionLibreria(QMainWindow):
             try:
                 anim_next_slide_in_reverse.finished.disconnect(transition_reverse_finished)
             except RuntimeError: pass
+            # Resetear estado de paginación de resultados al volver al menú
+            self.current_results_page_index = 0
+            self.total_results_pages = 0
+            if self.boton_anterior_resultados and self.boton_siguiente_resultados:
+                self.boton_anterior_resultados.hide()
+                self.boton_siguiente_resultados.hide()
+             # Reiniciar el temporizador de inactividad al volver al menú
+            if self.inactivity_timer.isActive():
+                self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS)
 
         anim_next_slide_in_reverse.finished.connect(transition_reverse_finished)
 
@@ -723,14 +860,23 @@ class VentanaGestionLibreria(QMainWindow):
     def resizeEvent(self, event):
         """Maneja el evento de redimensionamiento."""
         super().resizeEvent(event) 
-        # Centrado real del recuadro de resultados
-        if hasattr(self, 'results_scroll_area') and hasattr(self, 'results_content_widget'):
-            scroll_width = self.results_scroll_area.viewport().width()
-            self.results_content_widget.setMinimumWidth(scroll_width)
+        # El código anterior para centrar el results_content_widget ya no es necesario
+        # debido al cambio a QStackedWidget y el manejo del layout de cada página.
+        # if hasattr(self, 'results_pages_stack') and self.results_pages_stack.currentWidget():
+        #     current_page = self.results_pages_stack.currentWidget()
+        #     # Esta lógica necesitaría revisarse si quisiéramos hacer algo con el tamaño de la página actual
+        #     # pero el centrado de las tablas dentro de la página lo maneja el QHBoxLayout de la página.
+        pass
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
             self._mostrar_menu_principal_animado()
+        # Navegación por flechas en la vista de resultados
+        elif self.stacked_widget.currentWidget() == self.search_results_widget:
+            if event.key() == Qt.Key_Right:
+                self._ir_a_pagina_siguiente_resultados()
+            elif event.key() == Qt.Key_Left:
+                self._ir_a_pagina_anterior_resultados()
         super().keyPressEvent(event)
 
     def eventFilter(self, obj, event):

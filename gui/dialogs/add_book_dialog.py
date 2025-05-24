@@ -148,6 +148,7 @@ class AddBookDialog(QDialog):
         self.ultimo_isbn_procesado_con_enter = None
         self.ultimo_isbn_para_advertencia = None
         self.advertencia_isbn_mostrada_recientemente = False
+        self.ultima_posicion_ingresada = None # Asegurar que esté inicializada
         
         # Configuración del fondo con fallback
         project_root_for_bg = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -235,28 +236,28 @@ class AddBookDialog(QDialog):
         
         content_layout.addLayout(title_row_layout) 
         content_layout.addSpacing(15) 
-
+        
         # --- Sección de ISBN y Búsqueda (sin el toggle aquí) ---
         isbn_section_frame = QFrame() 
         isbn_section_frame.setStyleSheet(f""" 
-            QFrame {{ 
-                background-color: {COLORS['background_light']};  
-                border-radius: 15px; 
-                border: 1px solid {COLORS['border_light']}; 
-                padding: 10px; 
-            }} 
+            QFrame {{
+                background-color: {COLORS['background_light']}; 
+                border-radius: 15px;
+                border: 1px solid {COLORS['border_light']};
+                padding: 10px;
+            }}
         """)
         isbn_section_frame.setMaximumWidth(500) 
 
         isbn_section_layout = QVBoxLayout(isbn_section_frame)
         isbn_section_layout.setContentsMargins(0,0,0,0)
         isbn_section_layout.setSpacing(8) 
-
+        
         isbn_header_label = QLabel("ISBN:")
         isbn_header_label.setFont(QFont(self.font_family, FONTS["size_medium"], QFont.Weight.Bold))
         isbn_header_label.setStyleSheet(f"color: {COLORS['text_primary']}; background-color: transparent; border: none; padding-left: 2px;")
         isbn_section_layout.addWidget(isbn_header_label)
-
+        
         # Layout solo para input ISBN y botón Buscar
         input_buscar_layout = QHBoxLayout()
         self.isbn_input = QLineEdit()
@@ -266,7 +267,7 @@ class AddBookDialog(QDialog):
                                     f"QLineEdit::placeholder {{ font-size: 15px; color: {COLORS['text_secondary']}; }}") 
         self.isbn_input.returnPressed.connect(self.buscar_isbn)
         input_buscar_layout.addWidget(self.isbn_input, 3) 
-
+        
         self.buscar_button = QPushButton("Buscar")
         self.buscar_button.setFixedHeight(40)
         self.buscar_button.setFont(QFont(self.font_family, FONTS["size_normal"]))
@@ -278,7 +279,7 @@ class AddBookDialog(QDialog):
         isbn_section_layout.addLayout(input_buscar_layout)
         
         content_layout.addWidget(isbn_section_frame, alignment=Qt.AlignmentFlag.AlignHCenter)
-        content_layout.addSpacing(20) 
+        content_layout.addSpacing(20)
         
         # --- Form layout para el resto de los campos ---
         details_frame = QFrame()
@@ -553,7 +554,7 @@ class AddBookDialog(QDialog):
 
     def buscar_isbn(self):
         isbn_actual = self.isbn_input.text().strip()
-
+        
         # Lógica para evitar doble mensaje si la misma condición de error persiste tras una advertencia reciente
         if self.advertencia_isbn_mostrada_recientemente:
             if (not isbn_actual and self.ultimo_isbn_para_advertencia == "") or \
@@ -590,7 +591,7 @@ class AddBookDialog(QDialog):
         inventory_entries = search_result["inventory_entries"]
         
         self.ultimo_isbn_procesado_con_enter = isbn_actual # Marcar como procesado
-        self.posicion_input.clear() # Limpiar posición para nueva entrada o decisión
+        # No limpiamos self.posicion_input.clear() aquí para preservar la posición si ya existe
 
         if status == "encontrado_completo" and inventory_entries:
             # Libro en DB y en al menos una posición de inventario
@@ -627,8 +628,10 @@ class AddBookDialog(QDialog):
                 if success_inv:
                     QMessageBox.information(self, "Éxito", f"Se incrementó la cantidad en la posición {pos}. Nueva cantidad: {cantidad_inv}")
                     if not self.cerrar_al_terminar_toggle.isChecked(): # Modo múltiples
+                        self.ultima_posicion_ingresada = pos # Guardar la posición actual
                         self._reset_for_next_book()
                     else: # No modo múltiples (Cerrar al terminar)
+                        self.ultima_posicion_ingresada = None # Limpiar al cerrar
                         self.accept()
                 else:
                     QMessageBox.warning(self, "Error", message_inv)
@@ -657,16 +660,25 @@ class AddBookDialog(QDialog):
         elif status == "no_encontrado":
             QMessageBox.information(self, "Libro no encontrado", 
                                   "El libro no fue encontrado. Por favor, ingrese los datos manualmente.")
+            # Guardar el valor actual de la posición antes de limpiar/llenar otros campos
+            posicion_actual_antes_de_manual = self.posicion_input.text()
+            
             # Limpiar campos por si había algo, y hacerlos todos editables
-            self._clear_book_details_fields_and_disable_save() # Limpia detalles, pero no el ISBN
+            self._clear_book_details_fields_and_disable_save() # Limpia detalles, pero no el ISBN ni la posición
             self._fill_form_fields({}, make_editable=True) # Para asegurar que estén editables y habilita guardar
+            
+            # Restaurar la posición que estaba antes, si había alguna
+            self.posicion_input.setText(posicion_actual_antes_de_manual)
+            # Asegurarse de que la posición sea editable (ya debería serlo por _fill_form_fields)
+            self.posicion_input.setReadOnly(False)
+            
             self.titulo_input.setFocus()
         
         # Si después de buscar, algún campo que deba ser editable no lo es, forzarlo
         # Esta es una salvaguarda, la lógica anterior debería manejarlo.
         if not self.precio_input.isReadOnly() and not self.posicion_input.isReadOnly():
             self.guardar_button.setEnabled(True)
-        self._actualizar_estilo_guardar_button()
+            self._actualizar_estilo_guardar_button()
 
     def _limpiar_valor_precio(self, texto_con_formato: str) -> str:
         """Elimina los separadores de miles del texto del precio."""
@@ -712,6 +724,17 @@ class AddBookDialog(QDialog):
         self._actualizar_estilo_guardar_button()
         self.ultimo_isbn_procesado_con_enter = None
         self.isbn_input.setFocus()
+        # Simular que la última advertencia fue por ISBN vacío para evitar mensaje por doble enter
+        self.advertencia_isbn_mostrada_recientemente = True
+        self.ultimo_isbn_para_advertencia = ""
+        
+        # Lógica para la posición
+        if hasattr(self, 'ultima_posicion_ingresada') and self.ultima_posicion_ingresada and \
+           hasattr(self, 'cerrar_al_terminar_toggle') and not self.cerrar_al_terminar_toggle.isChecked():
+            self.posicion_input.setText(self.ultima_posicion_ingresada)
+        else:
+            self.posicion_input.clear() # Limpiar si el toggle está activado, no existe el atributo/toggle, o no hay última posición
+        self.posicion_input.setReadOnly(True)
 
     def guardar_libro(self):
         """
@@ -793,8 +816,10 @@ class AddBookDialog(QDialog):
                     QMessageBox.information(self, "Éxito", "Libro agregado correctamente al inventario.")
                 
                 if not self.cerrar_al_terminar_toggle.isChecked(): # Modo múltiples
+                    self.ultima_posicion_ingresada = posicion # Guardar la posición actual
                     self._reset_for_next_book()
                 else: # No modo múltiples (Cerrar al terminar)
+                    self.ultima_posicion_ingresada = None # Limpiar al cerrar
                     self.accept()
             else:
                 # Si falló guardar en inventario, ¿qué hacer? ¿Revertir el guardado en 'libros'?
