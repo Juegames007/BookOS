@@ -9,7 +9,7 @@ import os
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QSizePolicy, QSpacerItem, QMessageBox, QFrame, QApplication,
-    QLineEdit, QStackedWidget, QListWidget, QAbstractScrollArea, QScrollArea, QCheckBox, QGraphicsOpacityEffect
+    QLineEdit, QStackedWidget, QListWidget, QAbstractScrollArea, QScrollArea, QCheckBox, QGraphicsOpacityEffect, QGridLayout
 )
 from PySide6.QtGui import QFont, QPixmap, QPainter, QIcon
 from PySide6.QtCore import Qt, QPoint, QSize, QEasingCurve, QPropertyAnimation, QRect, QTimer, QEvent, QParallelAnimationGroup
@@ -376,49 +376,94 @@ class VentanaGestionLibreria(QMainWindow):
         # --- Sección de opciones de filtro (inicialmente oculta) ---
         self.filter_options_widget = QWidget(self.search_bar_container)
         self.filter_options_widget.setObjectName("filterOptionsWidget")
-        # Estilo para el contenedor de filtros, si es necesario (ej. padding)
-        self.filter_options_widget.setStyleSheet("""
-            QWidget#filterOptionsWidget {
-                background-color: transparent; /* Hereda el fondo de searchBarContainer */
-                padding: 0px 15px 10px 15px; /* Padding: arriba, der, abajo, izq */
-            }
-            QLabel {
+        self.filter_options_widget.setStyleSheet(f"""
+            QWidget#filterOptionsWidget {{
+                background-color: transparent; /* Restaurar fondo transparente */
+            }}
+            QLabel {{
                  background-color: transparent;
                  color: #444; /* Color de texto para etiquetas de filtro */
-            }
-            QCheckBox {
-                background-color: transparent;
-                color: #444;
-                spacing: 5px;
-            }
-            QCheckBox::indicator {
-                width: 15px;
-                height: 15px;
-            }
+            }}
+            QCheckBox {{
+                background-color: #e0e0e0; /* Gris claro no seleccionado */
+                border: none;
+                border-radius: 8px; /* Radio de las esquinas ligeramente reducido */
+                padding: 5px 10px; /* Padding ajustado para iconos */
+                color: #333; /* Color de texto */
+                spacing: 5px; /* Espacio entre icono y texto */
+                font-size: {FONTS["size_small"]}px; /* Ligeramente más pequeño para acomodar dos por fila */
+                cursor: pointing-hand; /* Cursor de mano */
+                min-height: 18px; 
+            }}
+            QCheckBox:hover {{
+                background-color: #d0d0d0; /* Gris un poco más oscuro */
+            }}
+            QCheckBox:checked {{
+                background-color: #60a5fa; /* Azul claro/medio para seleccionado */
+                color: white; /* Texto blanco para contraste */
+                font-weight: bold;
+            }}
+            QCheckBox:checked:hover {{
+                background-color: #3b82f6; /* Azul un poco más oscuro e intenso */
+            }}
+            QCheckBox::indicator {{
+                width: 0px; /* Ocultar el indicador original */
+                height: 0px;
+            }}
         """)
         
-        filter_options_layout = QVBoxLayout(self.filter_options_widget)
-        filter_options_layout.setContentsMargins(0, 5, 0, 0) # Margen superior para separar de la barra
-        filter_options_layout.setSpacing(8)
+        # Layout contenedor principal para filter_options_widget para centrar el grid
+        outer_filter_layout = QHBoxLayout(self.filter_options_widget)
+        outer_filter_layout.setContentsMargins(0, 10, 0, 15) # (izquierda, arriba, derecha, abajo) - Añadido margen vertical
+        outer_filter_layout.setSpacing(0)
+
+        filter_options_grid_layout = QGridLayout()
+        # Márgenes del grid en sí (si fueran necesarios, pero el centrado es por outer_layout)
+        # filter_options_grid_layout.setContentsMargins(10, 5, 10, 10) 
+        filter_options_grid_layout.setHorizontalSpacing(10) # Espacio horizontal entre checkboxes
+        filter_options_grid_layout.setVerticalSpacing(10)   # Espacio vertical entre filas de checkboxes
 
         # Crear checkboxes para los filtros
         filter_data = [
-            ("Buscar por Título", "filter_by_title_cb"),
-            ("Buscar por Autor", "filter_by_author_cb"),
-            ("Buscar por Categoría", "filter_by_category_cb")
+            ("Título", "filter_by_title_cb", "titulo.png"),
+            ("Autor", "filter_by_author_cb", "autor.png"),
+            ("Categoría", "filter_by_category_cb", "categoria.png")
         ]
+        
+        icon_base_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "imagenes")
+        checkbox_icon_size = QSize(16, 16) # Tamaño para los iconos de los checkbox
 
-        for text, attr_name in filter_data:
+        self.filter_checkboxes_effects.clear() # Limpiar por si acaso se llama varias veces (aunque no debería)
+
+        row, col = 0, 0
+        for text, attr_name, icon_filename in filter_data:
             checkbox = QCheckBox(text)
             checkbox.setChecked(True)
+            
+            icon_path = os.path.join(icon_base_path, icon_filename)
+            if os.path.exists(icon_path):
+                pixmap = QPixmap(icon_path)
+                checkbox.setIcon(QIcon(pixmap))
+                checkbox.setIconSize(checkbox_icon_size)
+            else:
+                print(f"Advertencia: No se pudo cargar el icono del filtro: {icon_path}")
             
             opacity_effect = QGraphicsOpacityEffect(checkbox)
             checkbox.setGraphicsEffect(opacity_effect)
             opacity_effect.setOpacity(0.0) # Inicialmente invisibles
             
-            filter_options_layout.addWidget(checkbox)
+            filter_options_grid_layout.addWidget(checkbox, row, col)
             self.filter_checkboxes_effects.append({"checkbox": checkbox, "effect": opacity_effect})
             setattr(self, attr_name, checkbox)
+
+            col += 1
+            if col >= 3: # Máximo 3 checkboxes por fila
+                col = 0
+                row += 1
+        
+        outer_filter_layout.addStretch(1)
+        outer_filter_layout.addLayout(filter_options_grid_layout)
+        outer_filter_layout.addStretch(1)
         
         self.filter_options_widget.hide() # Oculto por defecto
         main_search_layout.addWidget(self.filter_options_widget)
@@ -925,7 +970,7 @@ class VentanaGestionLibreria(QMainWindow):
             except RuntimeError: pass
 
         anim_next_page_slide_in.finished.connect(transition_finished)
-        
+
         anim_current_page_slide_out.start()
         anim_next_page_slide_in.start()
 
