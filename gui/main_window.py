@@ -9,10 +9,10 @@ import os
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QSizePolicy, QSpacerItem, QMessageBox, QFrame, QApplication,
-    QLineEdit, QStackedWidget, QListWidget, QAbstractScrollArea, QScrollArea
+    QLineEdit, QStackedWidget, QListWidget, QAbstractScrollArea, QScrollArea, QCheckBox
 )
-from PySide6.QtGui import QFont, QPixmap, QPainter, QIcon
-from PySide6.QtCore import Qt, QPoint, QSize, QEasingCurve, QPropertyAnimation, QRect, QTimer, QEvent
+from PySide6.QtGui import QFont, QPixmap, QPainter, QIcon, QColor, QBrush, QPen, QFontMetrics
+from PySide6.QtCore import Qt, QPoint, QSize, QEasingCurve, QPropertyAnimation, QRect, QTimer, QEvent, Signal, Property, QPointF
 from typing import List, Dict, Any
 
 from app.dependencies import DependencyFactory
@@ -21,6 +21,135 @@ from gui.common.styles import BACKGROUND_IMAGE_PATH, FONTS
 from gui.dialogs.add_book_dialog import AddBookDialog
 from gui.dialogs.search_book_dialog import SearchBookDialog
 from features.book_service import BookService
+
+# Definición del ToggleButton al principio del archivo
+class ToggleButton(QWidget):
+    """
+    Un widget de botón de activación (ON/OFF) con animación.
+    """
+    toggled = Signal(bool)
+
+    def __init__(self, parent=None, 
+                 bar_color_off=QColor(200, 200, 205), # Gris suave para OFF
+                 bar_color_on=QColor(70, 190, 130),  # Verde agradable para ON
+                 handle_color=QColor(255, 255, 255), # Manija blanca
+                 handle_border_color=QColor(170, 170, 170) # Borde sutil para la manija
+                ):
+        super().__init__(parent)
+        self.setFixedSize(50, 26) # Un poco más pequeño y proporcionado
+        self.setCursor(Qt.CursorShape.PointingHandCursor) # Añadir cursor de mano
+        self._is_on = True # Por defecto en ON
+
+        self._bar_color_off = bar_color_off
+        self._bar_color_on = bar_color_on
+        self._handle_color = handle_color
+        self._handle_border_color = handle_border_color
+        # Eliminamos _text_on y _text_off ya que no dibujaremos texto dentro
+
+        self._handle_position_x = 1.0 # Por defecto en la posición ON
+
+        self._animation = QPropertyAnimation(self, b"handle_position_prop", self)
+        self._animation.setEasingCurve(QEasingCurve.Type.InOutSine) # Probamos otra curva
+        self._animation.setDuration(150) # Animación un poco más rápida
+
+    @Property(float)
+    def handle_position_prop(self):
+        return self._handle_position_x
+
+    @handle_position_prop.setter
+    def handle_position_prop(self, value):
+        self._handle_position_x = value
+        self.update()
+
+    def sizeHint(self):
+        return QSize(50, 26)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        rect = self.rect()
+        padding = 2 # Padding general para el contenido
+        content_rect = rect.adjusted(padding, padding, -padding, -padding)
+        
+        bar_radius = content_rect.height() / 2.0
+        handle_radius = bar_radius - 1.5 # Manija un poco más pequeña que la mitad de la altura de la barra
+
+        # Interpolar color de fondo de la barra durante la animación
+        # (código de interpolación de color existente se mantiene)
+        current_bar_color = QColor()
+        r_off, g_off, b_off, _ = self._bar_color_off.getRgb()
+        r_on, g_on, b_on, _ = self._bar_color_on.getRgb()
+
+        r = r_off + (r_on - r_off) * self._handle_position_x
+        g = g_off + (g_on - g_off) * self._handle_position_x
+        b = b_off + (b_on - b_off) * self._handle_position_x
+        current_bar_color.setRgb(int(r), int(g), int(b))
+        
+        painter.setBrush(QBrush(current_bar_color))
+        painter.setPen(Qt.PenStyle.NoPen) # Sin borde para la barra principal
+        painter.drawRoundedRect(content_rect, bar_radius, bar_radius)
+
+        # Manija (círculo)
+        painter.setBrush(QBrush(self._handle_color))
+        # Borde sutil para la manija
+        pen_handle = QPen(self._handle_border_color)
+        pen_handle.setWidthF(0.5)
+        painter.setPen(pen_handle)
+        
+        handle_center_y = content_rect.center().y()
+        # El rango de movimiento de la manija es desde el centro del círculo izquierdo hasta el centro del círculo derecho de la barra
+        handle_x_start = content_rect.left() + bar_radius 
+        handle_x_end = content_rect.right() - bar_radius
+        
+        current_handle_center_x = handle_x_start + (handle_x_end - handle_x_start) * self._handle_position_x
+        
+        # Dibujar una sutil sombra debajo de la manija (opcional)
+        shadow_offset = 0.5
+        shadow_color = QColor(0, 0, 0, 50) # Negro semi-transparente
+        painter.setBrush(QBrush(shadow_color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawEllipse(QPointF(current_handle_center_x + shadow_offset, handle_center_y + shadow_offset), handle_radius, handle_radius)
+
+        # Dibujar la manija encima de la sombra
+        painter.setBrush(QBrush(self._handle_color))
+        painter.setPen(pen_handle)
+        painter.drawEllipse(QPointF(current_handle_center_x, handle_center_y), handle_radius, handle_radius)
+
+        # No dibujamos texto "ON"/"OFF" dentro del interruptor
+        # El código para dibujar texto ha sido eliminado de aquí.
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.toggle()
+        super().mousePressEvent(event)
+
+    def toggle(self):
+        self._is_on = not self._is_on
+        self.toggled.emit(self._is_on)
+        
+        self._animation.setStartValue(self._handle_position_x)
+        self._animation.setEndValue(1.0 if self._is_on else 0.0)
+        self._animation.start()
+
+    def isOn(self):
+        return self._is_on
+
+    def setOn(self, on, animate=True):
+        if self._is_on == on:
+            return
+        
+        self._is_on = on
+        # No emitimos la señal aquí si solo estamos seteando el estado visualmente
+        # self.toggled.emit(self._is_on) 
+
+        if animate:
+            self._animation.setStartValue(self._handle_position_x)
+            self._animation.setEndValue(1.0 if self._is_on else 0.0)
+            self._animation.start()
+        else:
+            self._handle_position_x = 1.0 if self._is_on else 0.0
+            self.update()
 
 def accion_pendiente(nombre_accion, parent_window=None):
     """
@@ -148,6 +277,10 @@ class VentanaGestionLibreria(QMainWindow):
             self.main_menu_widget.setStyleSheet("QWidget { background: transparent; }")
             # self.search_results_widget también debería ser transparente para ver el fondo de la ventana
             self.search_results_widget.setStyleSheet("QWidget { background: transparent; }")
+            
+            # Crear el widget de filtros ANTES de configurar la UI normal que podría referenciarlo indirectamente
+            # o para asegurar el orden correcto de inicialización de todos los componentes de la UI.
+            self._crear_widget_filtros()
             self._setup_ui_normal()
 
         # Timer de inactividad
@@ -155,6 +288,13 @@ class VentanaGestionLibreria(QMainWindow):
         self.inactivity_timer.setInterval(self.INACTIVITY_TIMEOUT_MS)
         self.inactivity_timer.timeout.connect(self._mostrar_menu_principal_animado)
         self.inactivity_timer.start()
+
+        # Timer para auto-cierre del widget de filtros
+        self.filter_widget_close_timer = QTimer(self)
+        self.filter_widget_close_timer.setSingleShot(True)
+        self.filter_widget_close_timer.setInterval(1000)  # 1 segundo
+        self.filter_widget_close_timer.timeout.connect(self._auto_close_filter_widget)
+
         # Instalar filtro de eventos para detectar actividad
         self.installEventFilter(self)
 
@@ -351,6 +491,9 @@ class VentanaGestionLibreria(QMainWindow):
         menu_icon_label.setFont(menu_icon_font)
         menu_icon_label.setStyleSheet("background-color: transparent; border: none; color: #555;")
         menu_icon_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        # Conectar el evento de clic para el icono de menú
+        menu_icon_label.mousePressEvent = self._toggle_filter_widget
+        self.menu_icon_label_ref = menu_icon_label # Guardar referencia
 
 
         layout.addWidget(search_icon_label)
@@ -889,4 +1032,198 @@ class VentanaGestionLibreria(QMainWindow):
         ]:
             if self.inactivity_timer.isActive(): # Solo reiniciar si está activo
                 self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS) # Reinicia con el intervalo completo
+
+        # Cerrar el widget de filtros si se hace clic fuera de él
+        if hasattr(self, 'filter_widget') and self.filter_widget.isVisible() and event.type() == QEvent.Type.MouseButtonPress:
+            if not self.filter_widget.geometry().contains(event.globalPosition().toPoint()):
+                # Y si el clic no fue sobre el icono que lo abre
+                clicked_widget = QApplication.widgetAt(event.globalPosition().toPoint())
+                if hasattr(self, 'menu_icon_label_ref') and clicked_widget != self.menu_icon_label_ref:
+                    self.filter_widget.hide()
+                    self.filter_widget_close_timer.stop() # Detener timer
+                elif not hasattr(self, 'menu_icon_label_ref'): # Si no tenemos referencia, ocultamos igual
+                    self.filter_widget.hide()
+                    self.filter_widget_close_timer.stop() # Detener timer
+                    
+        # Manejo de eventos Enter/Leave para el widget de filtros
+        if obj == self.filter_widget:
+            if event.type() == QEvent.Type.Enter:
+                self.filter_widget_close_timer.stop()
+            elif event.type() == QEvent.Type.Leave:
+                self.filter_widget_close_timer.start()
+                    
+        return super().eventFilter(obj, event)
+
+    # --- Métodos para el widget de filtros ---
+    def _crear_widget_filtros(self):
+        """Crea el widget flotante para las opciones de filtro."""
+        self.filter_widget = QFrame(self) # Padre es la ventana principal para superposición
+        self.filter_widget.setObjectName("filterPopupContainer") # Renombrado para claridad
+        self.filter_widget.setWindowFlags(Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.filter_widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground) # Hacer el contenedor del popup transparente
+        self.filter_widget.setStyleSheet("QFrame#filterPopupContainer { background-color: transparent; }") # Asegurar transparencia
+
+        # Contenedor interno que tendrá el estilo de tarjeta y el contenido real
+        styled_content_frame = QFrame(self.filter_widget)
+        styled_content_frame.setObjectName("filterStyledContent")
+        styled_content_frame.setStyleSheet(""" 
+            QFrame#filterStyledContent {
+                background-color: rgba(240, 242, 245, 0.96); /* Aumentamos opacidad (antes 85) */ 
+                border-radius: 18px; /* Radio ligeramente menor para evitar artefactos */
+                border: 1px solid rgba(180, 180, 180, 0.9); /* Borde un poco más visible y opaco */
+                padding: 12px; /* Reducido un poco el padding */
+            }
+            QLabel#filterTitleLabel { /* Selector específico para el título */
+                background-color: transparent;
+                color: #222; /* Color de texto más oscuro para el título */
+                padding-bottom: 5px; /* Espacio debajo del título */
+            }
+            QLabel { /* Estilo general para etiquetas de filtro */
+                background-color: transparent;
+                color: #333;
+                padding-left: 3px; /* Espacio entre etiqueta y toggle */
+            }
+            /* No necesitamos QCheckBox aquí ahora */
+        """)
+        
+        filter_layout = QVBoxLayout(styled_content_frame)
+        filter_layout.setContentsMargins(8, 8, 8, 8) 
+        filter_layout.setSpacing(10) # Aumentar espaciado entre filas de filtro
+
+        title_label = QLabel("Filtros de Búsqueda")
+        title_label.setObjectName("filterTitleLabel") # Para estilo específico
+        font_titulo_seccion = QFont(self.font_family, FONTS["size_medium"], QFont.Weight.Bold)
+        title_label.setFont(font_titulo_seccion)
+        filter_layout.addWidget(title_label)
+
+        # Crear filtros con ToggleButton
+        filter_options = [
+            ("Por Categoría", "filter_category_toggle"),
+            ("Por Autor", "filter_author_toggle"),
+            ("Por Título", "filter_title_toggle")
+        ]
+
+        for text, attr_name in filter_options:
+            row_layout = QHBoxLayout()
+            row_layout.setSpacing(8)
+            
+            label = QLabel(text)
+            label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            
+            toggle_button = ToggleButton(self) # Usar colores por defecto o personalizarlos
+            # toggle_button.setFixedSize(50,25) # Ajustar tamaño si es necesario
+            setattr(self, attr_name, toggle_button) # Guardar referencia si es necesario
+
+            row_layout.addWidget(label)
+            row_layout.addStretch(1) # Empuja el toggle a la derecha
+            row_layout.addWidget(toggle_button)
+            filter_layout.addLayout(row_layout)
+
+
+        apply_button = CustomButton(text="Aplicar") 
+        apply_button.setFixedHeight(30) 
+        apply_button.setFixedWidth(100) 
+        # apply_button.clicked.connect(self._aplicar_filtros)
+        
+        # Layout para centrar el botón
+        button_container_layout = QHBoxLayout()
+        button_container_layout.addStretch(1)
+        button_container_layout.addWidget(apply_button)
+        button_container_layout.addStretch(1)
+        filter_layout.addLayout(button_container_layout)
+
+        popup_main_layout = QVBoxLayout(self.filter_widget)
+        popup_main_layout.setContentsMargins(0,0,0,0) 
+        popup_main_layout.addWidget(styled_content_frame)
+        
+        # Ajustar el tamaño del popup para que se ajuste al contenido.
+        # styled_content_frame.adjustSize() # Intentar que el contenido defina el tamaño
+        # self.filter_widget.adjustSize()  # Luego el popup se ajusta al contenido
+        # O mantener un tamaño fijo si `adjustSize` no funciona como se espera con popups.
+        self.filter_widget.setFixedSize(260, 200) # Ajustar según sea necesario
+
+
+        self.filter_widget.hide() 
+        self.filter_widget.installEventFilter(self)
+
+    def _toggle_filter_widget(self, event=None):
+        """Muestra u oculta el widget de filtros."""
+        if self.filter_widget.isVisible():
+            self.filter_widget.hide()
+            self.filter_widget_close_timer.stop() # Detener timer si se oculta manualmente
+        else:
+            # Necesitamos el menu_icon_label para posicionar el widget
+            # Esto es un poco complicado porque menu_icon_label se crea en _crear_barra_busqueda
+            # y no es un atributo de la clase directamente.
+            # Vamos a buscarlo. Esto es frágil; sería mejor guardar una referencia.
+            
+            # Alternativa: Guardar referencia a menu_icon_label
+            # En _crear_barra_busqueda, hacer: self.menu_icon_label_finanzas = menu_icon_label
+            # Y aquí usar self.menu_icon_label_finanzas.
+            
+            # Por ahora, intentaremos posicionarlo de forma genérica cerca de la barra de búsqueda
+            # o asumimos que el search_bar_widget_finanzas es el referente.
+            
+            # Para una mejor solución, almacenaremos la referencia al ícono del menú.
+            # Modificaré _crear_barra_busqueda para almacenar self.menu_icon_label_ref
+
+            if hasattr(self, 'menu_icon_label_ref') and self.menu_icon_label_ref:
+                menu_icon = self.menu_icon_label_ref
+                # Calcular posición global del icono
+                global_pos = menu_icon.mapToGlobal(QPoint(0,0))
+                
+                # Posicionar el widget de filtros debajo del icono
+                # Ajustar los offsets (0, menu_icon.height() + 5) según sea necesario
+                self.filter_widget.move(global_pos.x(), global_pos.y() + menu_icon.height() + 5)
+            else:
+                # Fallback: posicionar cerca de la barra de búsqueda si la referencia no está.
+                # Esto requeriría que search_bar_widget_finanzas sea un atributo de self.
+                # Por ahora, lo posicionaremos en un lugar fijo si no encontramos el icono.
+                search_bar_geometry = self.search_input.parentWidget().geometry() # El contenedor de la barra
+                parent_pos = self.search_input.parentWidget().mapToGlobal(QPoint(0,0))
+                self.filter_widget.move(parent_pos.x() + search_bar_geometry.width() - self.filter_widget.width() - 5, 
+                                        parent_pos.y() + search_bar_geometry.height() + 5)
+
+
+            self.filter_widget.show()
+            self.filter_widget.raise_() # Asegurar que esté por encima
+
+    def _auto_close_filter_widget(self):
+        """Cierra el widget de filtros automáticamente si el timer expira."""
+        if self.filter_widget.isVisible():
+            self.filter_widget.hide()
+            # El timer es single shot, se detiene solo, pero por si acaso
+            self.filter_widget_close_timer.stop()
+
+    # Evento para cerrar el popup si se hace clic fuera (opcional pero recomendado)
+    def eventFilter(self, obj, event):
+        # Reinicia el temporizador de inactividad en cualquier evento de mouse o teclado
+        if event.type() in [
+            QEvent.Type.MouseMove,
+            QEvent.Type.KeyPress,
+            QEvent.Type.MouseButtonPress,
+            QEvent.Type.MouseButtonRelease
+        ]:
+            if self.inactivity_timer.isActive(): # Solo reiniciar si está activo
+                self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS) # Reinicia con el intervalo completo
+
+        # Cerrar el widget de filtros si se hace clic fuera de él
+        if self.filter_widget.isVisible() and event.type() == QEvent.Type.MouseButtonPress:
+            if not self.filter_widget.geometry().contains(event.globalPosition().toPoint()):
+                # Y si el clic no fue sobre el icono que lo abre
+                clicked_widget = QApplication.widgetAt(event.globalPosition().toPoint())
+                if hasattr(self, 'menu_icon_label_ref') and clicked_widget != self.menu_icon_label_ref:
+                    self.filter_widget.hide()
+                    self.filter_widget_close_timer.stop() # Detener timer
+                elif not hasattr(self, 'menu_icon_label_ref'): # Si no tenemos referencia, ocultamos igual
+                    self.filter_widget.hide()
+                    self.filter_widget_close_timer.stop() # Detener timer
+                    
+        # Manejo de eventos Enter/Leave para el widget de filtros
+        if obj == self.filter_widget:
+            if event.type() == QEvent.Type.Enter:
+                self.filter_widget_close_timer.stop()
+            elif event.type() == QEvent.Type.Leave:
+                self.filter_widget_close_timer.start()
+                    
         return super().eventFilter(obj, event) 
