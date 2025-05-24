@@ -9,10 +9,10 @@ import os
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QSizePolicy, QSpacerItem, QMessageBox, QFrame, QApplication,
-    QLineEdit, QStackedWidget, QListWidget, QAbstractScrollArea, QScrollArea, QCheckBox
+    QLineEdit, QStackedWidget, QListWidget, QAbstractScrollArea, QScrollArea, QCheckBox, QGraphicsOpacityEffect
 )
-from PySide6.QtGui import QFont, QPixmap, QPainter, QIcon, QColor, QBrush, QPen, QFontMetrics
-from PySide6.QtCore import Qt, QPoint, QSize, QEasingCurve, QPropertyAnimation, QRect, QTimer, QEvent, Signal, Property, QPointF
+from PySide6.QtGui import QFont, QPixmap, QPainter, QIcon
+from PySide6.QtCore import Qt, QPoint, QSize, QEasingCurve, QPropertyAnimation, QRect, QTimer, QEvent, QParallelAnimationGroup
 from typing import List, Dict, Any
 
 from app.dependencies import DependencyFactory
@@ -21,135 +21,6 @@ from gui.common.styles import BACKGROUND_IMAGE_PATH, FONTS
 from gui.dialogs.add_book_dialog import AddBookDialog
 from gui.dialogs.search_book_dialog import SearchBookDialog
 from features.book_service import BookService
-
-# Definición del ToggleButton al principio del archivo
-class ToggleButton(QWidget):
-    """
-    Un widget de botón de activación (ON/OFF) con animación.
-    """
-    toggled = Signal(bool)
-
-    def __init__(self, parent=None, 
-                 bar_color_off=QColor(200, 200, 205), # Gris suave para OFF
-                 bar_color_on=QColor(70, 190, 130),  # Verde agradable para ON
-                 handle_color=QColor(255, 255, 255), # Manija blanca
-                 handle_border_color=QColor(170, 170, 170) # Borde sutil para la manija
-                ):
-        super().__init__(parent)
-        self.setFixedSize(50, 26) # Un poco más pequeño y proporcionado
-        self.setCursor(Qt.CursorShape.PointingHandCursor) # Añadir cursor de mano
-        self._is_on = True # Por defecto en ON
-
-        self._bar_color_off = bar_color_off
-        self._bar_color_on = bar_color_on
-        self._handle_color = handle_color
-        self._handle_border_color = handle_border_color
-        # Eliminamos _text_on y _text_off ya que no dibujaremos texto dentro
-
-        self._handle_position_x = 1.0 # Por defecto en la posición ON
-
-        self._animation = QPropertyAnimation(self, b"handle_position_prop", self)
-        self._animation.setEasingCurve(QEasingCurve.Type.InOutSine) # Probamos otra curva
-        self._animation.setDuration(150) # Animación un poco más rápida
-
-    @Property(float)
-    def handle_position_prop(self):
-        return self._handle_position_x
-
-    @handle_position_prop.setter
-    def handle_position_prop(self, value):
-        self._handle_position_x = value
-        self.update()
-
-    def sizeHint(self):
-        return QSize(50, 26)
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        rect = self.rect()
-        padding = 2 # Padding general para el contenido
-        content_rect = rect.adjusted(padding, padding, -padding, -padding)
-        
-        bar_radius = content_rect.height() / 2.0
-        handle_radius = bar_radius - 1.5 # Manija un poco más pequeña que la mitad de la altura de la barra
-
-        # Interpolar color de fondo de la barra durante la animación
-        # (código de interpolación de color existente se mantiene)
-        current_bar_color = QColor()
-        r_off, g_off, b_off, _ = self._bar_color_off.getRgb()
-        r_on, g_on, b_on, _ = self._bar_color_on.getRgb()
-
-        r = r_off + (r_on - r_off) * self._handle_position_x
-        g = g_off + (g_on - g_off) * self._handle_position_x
-        b = b_off + (b_on - b_off) * self._handle_position_x
-        current_bar_color.setRgb(int(r), int(g), int(b))
-        
-        painter.setBrush(QBrush(current_bar_color))
-        painter.setPen(Qt.PenStyle.NoPen) # Sin borde para la barra principal
-        painter.drawRoundedRect(content_rect, bar_radius, bar_radius)
-
-        # Manija (círculo)
-        painter.setBrush(QBrush(self._handle_color))
-        # Borde sutil para la manija
-        pen_handle = QPen(self._handle_border_color)
-        pen_handle.setWidthF(0.5)
-        painter.setPen(pen_handle)
-        
-        handle_center_y = content_rect.center().y()
-        # El rango de movimiento de la manija es desde el centro del círculo izquierdo hasta el centro del círculo derecho de la barra
-        handle_x_start = content_rect.left() + bar_radius 
-        handle_x_end = content_rect.right() - bar_radius
-        
-        current_handle_center_x = handle_x_start + (handle_x_end - handle_x_start) * self._handle_position_x
-        
-        # Dibujar una sutil sombra debajo de la manija (opcional)
-        shadow_offset = 0.5
-        shadow_color = QColor(0, 0, 0, 50) # Negro semi-transparente
-        painter.setBrush(QBrush(shadow_color))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(QPointF(current_handle_center_x + shadow_offset, handle_center_y + shadow_offset), handle_radius, handle_radius)
-
-        # Dibujar la manija encima de la sombra
-        painter.setBrush(QBrush(self._handle_color))
-        painter.setPen(pen_handle)
-        painter.drawEllipse(QPointF(current_handle_center_x, handle_center_y), handle_radius, handle_radius)
-
-        # No dibujamos texto "ON"/"OFF" dentro del interruptor
-        # El código para dibujar texto ha sido eliminado de aquí.
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.toggle()
-        super().mousePressEvent(event)
-
-    def toggle(self):
-        self._is_on = not self._is_on
-        self.toggled.emit(self._is_on)
-        
-        self._animation.setStartValue(self._handle_position_x)
-        self._animation.setEndValue(1.0 if self._is_on else 0.0)
-        self._animation.start()
-
-    def isOn(self):
-        return self._is_on
-
-    def setOn(self, on, animate=True):
-        if self._is_on == on:
-            return
-        
-        self._is_on = on
-        # No emitimos la señal aquí si solo estamos seteando el estado visualmente
-        # self.toggled.emit(self._is_on) 
-
-        if animate:
-            self._animation.setStartValue(self._handle_position_x)
-            self._animation.setEndValue(1.0 if self._is_on else 0.0)
-            self._animation.start()
-        else:
-            self._handle_position_x = 1.0 if self._is_on else 0.0
-            self.update()
 
 def accion_pendiente(nombre_accion, parent_window=None):
     """
@@ -221,6 +92,13 @@ class VentanaGestionLibreria(QMainWindow):
         book_info_service = DependencyFactory.get_book_info_service()
         self.book_service = BookService(data_manager, book_info_service)
 
+        # Atributos para la barra de búsqueda expandible y filtros
+        self.search_bar_base_height = 55 
+        self.search_bar_expanded_height = 0 # Se calculará dinámicamente
+        self._filters_visible = False
+        self.filter_checkboxes_effects = [] # Para guardar checkboxes y sus efectos
+        self.animation_group = QParallelAnimationGroup(self) # Grupo de animación principal
+
         # Atributos para paginación de resultados
         self.current_results_page_index = 0
         self.total_results_pages = 0
@@ -280,7 +158,6 @@ class VentanaGestionLibreria(QMainWindow):
             
             # Crear el widget de filtros ANTES de configurar la UI normal que podría referenciarlo indirectamente
             # o para asegurar el orden correcto de inicialización de todos los componentes de la UI.
-            self._crear_widget_filtros()
             self._setup_ui_normal()
 
         # Timer de inactividad
@@ -288,12 +165,6 @@ class VentanaGestionLibreria(QMainWindow):
         self.inactivity_timer.setInterval(self.INACTIVITY_TIMEOUT_MS)
         self.inactivity_timer.timeout.connect(self._mostrar_menu_principal_animado)
         self.inactivity_timer.start()
-
-        # Timer para auto-cierre del widget de filtros
-        self.filter_widget_close_timer = QTimer(self)
-        self.filter_widget_close_timer.setSingleShot(True)
-        self.filter_widget_close_timer.setInterval(1000)  # 1 segundo
-        self.filter_widget_close_timer.timeout.connect(self._auto_close_filter_widget)
 
         # Instalar filtro de eventos para detectar actividad
         self.installEventFilter(self)
@@ -440,35 +311,40 @@ class VentanaGestionLibreria(QMainWindow):
         self.root_layout_main_menu.addStretch(1)
 
     def _crear_barra_busqueda(self, ancho: int):
-        search_bar_container = QFrame()
-        search_bar_container.setObjectName("searchBarContainer")
-        search_bar_container.setFixedHeight(55)
-        search_bar_container.setFixedWidth(ancho)
-        search_bar_container.setStyleSheet(f"""
+        self.search_bar_container = QFrame() # Hacerlo atributo de instancia
+        self.search_bar_container.setObjectName("searchBarContainer")
+        self.search_bar_container.setFixedWidth(ancho)
+        self.search_bar_container.setStyleSheet(f"""
             QFrame#searchBarContainer {{
                 background-color: rgba(255, 255, 255, 90);
                 border-radius: 15px;
                 border: 1px solid rgba(200, 200, 200, 100);
+                /* La altura se manejará dinámicamente */
             }}
         """)
 
-        layout = QHBoxLayout(search_bar_container)
-        layout.setContentsMargins(15, 0, 15, 0)
-        layout.setSpacing(10)
+        # Layout principal para la barra de búsqueda (vertical)
+        main_search_layout = QVBoxLayout(self.search_bar_container)
+        main_search_layout.setContentsMargins(0, 0, 0, 0) # Sin márgenes para el layout principal
+        main_search_layout.setSpacing(0) # Sin espaciado
 
-        # Icono de búsqueda
+        # --- Sección superior de la barra de búsqueda (input y iconos) ---
+        top_search_widget = QWidget()
+        top_search_widget.setFixedHeight(self.search_bar_base_height) # Fijar altura de la parte superior
+        layout_top_search = QHBoxLayout(top_search_widget)
+        layout_top_search.setContentsMargins(15, 10, 15, 10) 
+        layout_top_search.setSpacing(10)
+
         search_icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "imagenes", "buscar.png")
         search_icon_label = QLabel()
         if os.path.exists(search_icon_path):
             search_pixmap = QPixmap(search_icon_path)
             search_icon_label.setPixmap(search_pixmap.scaled(QSize(24,24), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         else:
-            search_icon_label.setText("?") # Placeholder si no hay icono
+            search_icon_label.setText("?")
             print(f"Advertencia: No se pudo cargar el icono de búsqueda en: {search_icon_path}")
         search_icon_label.setStyleSheet("background-color: transparent; border: none;")
 
-
-        # Campo de texto para búsqueda
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search")
         self.search_input.setFixedHeight(35)
@@ -481,32 +357,210 @@ class VentanaGestionLibreria(QMainWindow):
                 padding-left: 5px;
             }
         """)
-        self.search_input.returnPressed.connect(self._iniciar_busqueda) # Conectar returnPressed
+        self.search_input.returnPressed.connect(self._iniciar_busqueda)
         
-        # Placeholder para el icono de menú (hamburguesa)
-        # Usaremos un QLabel con texto por ahora, ya que no tenemos el icono exacto.
-        # Este es el estilo de tres líneas horizontales (menú hamburguesa)
         menu_icon_label = QLabel("≡") 
         menu_icon_font = QFont(self.font_family, FONTS["size_large"], QFont.Weight.Bold)
         menu_icon_label.setFont(menu_icon_font)
         menu_icon_label.setStyleSheet("background-color: transparent; border: none; color: #555;")
         menu_icon_label.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Conectar el evento de clic para el icono de menú
-        menu_icon_label.mousePressEvent = self._toggle_filter_widget
-        self.menu_icon_label_ref = menu_icon_label # Guardar referencia
+        menu_icon_label.mousePressEvent = self._toggle_filter_expansion # Conectar a nueva función
+        # self.menu_icon_label_ref = menu_icon_label # Ya no necesitamos la ref para el popup
 
-
-        layout.addWidget(search_icon_label)
-        layout.addWidget(self.search_input, 1) # El 1 es para que el QLineEdit ocupe el espacio disponible
-        layout.addWidget(menu_icon_label)
+        layout_top_search.addWidget(search_icon_label)
+        layout_top_search.addWidget(self.search_input, 1)
+        layout_top_search.addWidget(menu_icon_label)
         
-        # Aplicar un ancho máximo al contenedor de la barra de búsqueda
-        # para que no se extienda demasiado en pantallas grandes
-        # Tomaremos un ancho un poco mayor que las tarjetas individuales
-        # search_bar_container.setFixedWidth(400) # Comentado/Eliminado: el ancho se pasa como argumento
+        main_search_layout.addWidget(top_search_widget)
 
+        # --- Sección de opciones de filtro (inicialmente oculta) ---
+        self.filter_options_widget = QWidget(self.search_bar_container)
+        self.filter_options_widget.setObjectName("filterOptionsWidget")
+        # Estilo para el contenedor de filtros, si es necesario (ej. padding)
+        self.filter_options_widget.setStyleSheet("""
+            QWidget#filterOptionsWidget {
+                background-color: transparent; /* Hereda el fondo de searchBarContainer */
+                padding: 0px 15px 10px 15px; /* Padding: arriba, der, abajo, izq */
+            }
+            QLabel {
+                 background-color: transparent;
+                 color: #444; /* Color de texto para etiquetas de filtro */
+            }
+            QCheckBox {
+                background-color: transparent;
+                color: #444;
+                spacing: 5px;
+            }
+            QCheckBox::indicator {
+                width: 15px;
+                height: 15px;
+            }
+        """)
+        
+        filter_options_layout = QVBoxLayout(self.filter_options_widget)
+        filter_options_layout.setContentsMargins(0, 5, 0, 0) # Margen superior para separar de la barra
+        filter_options_layout.setSpacing(8)
 
-        return search_bar_container
+        # Crear checkboxes para los filtros
+        filter_data = [
+            ("Buscar por Título", "filter_by_title_cb"),
+            ("Buscar por Autor", "filter_by_author_cb"),
+            ("Buscar por Categoría", "filter_by_category_cb")
+        ]
+
+        for text, attr_name in filter_data:
+            checkbox = QCheckBox(text)
+            checkbox.setChecked(True)
+            
+            opacity_effect = QGraphicsOpacityEffect(checkbox)
+            checkbox.setGraphicsEffect(opacity_effect)
+            opacity_effect.setOpacity(0.0) # Inicialmente invisibles
+            
+            filter_options_layout.addWidget(checkbox)
+            self.filter_checkboxes_effects.append({"checkbox": checkbox, "effect": opacity_effect})
+            setattr(self, attr_name, checkbox)
+        
+        self.filter_options_widget.hide() # Oculto por defecto
+        main_search_layout.addWidget(self.filter_options_widget)
+        main_search_layout.addStretch(1) # Para que los filtros no ocupen espacio extra si el VBox es más grande
+
+        print(f"DEBUG _crear_barra_busqueda: hasattr filter_options_widget: {hasattr(self, 'filter_options_widget')}") # DEBUG
+        if hasattr(self, 'filter_options_widget'):
+            print(f"DEBUG _crear_barra_busqueda: filter_options_widget is {self.filter_options_widget}") # DEBUG
+        print(f"DEBUG _crear_barra_busqueda: filter_checkboxes_effects length: {len(self.filter_checkboxes_effects) if hasattr(self, 'filter_checkboxes_effects') else 'N/A'}") # DEBUG
+        print(f"DEBUG _crear_barra_busqueda: filter_checkboxes_effects content: {self.filter_checkboxes_effects if hasattr(self, 'filter_checkboxes_effects') else 'N/A'}") # DEBUG
+
+        return self.search_bar_container
+
+    def _toggle_filter_expansion(self, event=None):
+        print("--- _toggle_filter_expansion called ---") # DEBUG
+        print(f"Initial _filters_visible: {self._filters_visible}") # DEBUG
+
+        has_options_widget = hasattr(self, 'filter_options_widget')
+        checkbox_effects_exist_and_not_empty = hasattr(self, 'filter_checkboxes_effects') and bool(self.filter_checkboxes_effects)
+
+        print(f"DEBUG _toggle_filter_expansion: hasattr(self, 'filter_options_widget'): {has_options_widget}") # DEBUG
+        print(f"DEBUG _toggle_filter_expansion: hasattr(self, 'filter_checkboxes_effects'): {hasattr(self, 'filter_checkboxes_effects')}") # DEBUG
+        if hasattr(self, 'filter_checkboxes_effects'):
+            print(f"DEBUG _toggle_filter_expansion: bool(self.filter_checkboxes_effects): {bool(self.filter_checkboxes_effects)} (Length: {len(self.filter_checkboxes_effects)})") # DEBUG
+
+        if not has_options_widget or not checkbox_effects_exist_and_not_empty:
+            print(f"DEBUG: Condition MET. has_options_widget: {has_options_widget}, checkbox_effects_exist_and_not_empty: {checkbox_effects_exist_and_not_empty}. Returning.") # DEBUG
+            return
+
+        # Detener y limpiar animaciones anteriores del grupo
+        if self.animation_group.state() == QParallelAnimationGroup.State.Running:
+            print("DEBUG: Animation group was running. Stopping.") # DEBUG
+            self.animation_group.stop()
+        self.animation_group.clear() # Elimina todas las animaciones del grupo
+        print("DEBUG: Animation group cleared.") # DEBUG
+
+        # Duraciones y retrasos
+        height_anim_duration = 280  # Duración para la animación de altura del contenedor
+        opacity_anim_duration = 150 # Duración para la animación de opacidad de cada item
+        # delay_per_item = 50 # No se usa actualmente
+
+        # Calcular la altura total que necesitará el filter_options_widget
+        # Es importante mostrarlo para que su layout calcule el tamaño correctamente.
+        self.filter_options_widget.show() 
+        QApplication.processEvents() # Forzar el procesamiento para asegurar que el tamaño esté calculado
+        preferred_filter_height = self.filter_options_widget.sizeHint().height()
+        if preferred_filter_height <= 0: # Fallback si sizeHint no es suficiente
+            preferred_filter_height = self.filter_options_widget.layout().sizeHint().height()
+        print(f"DEBUG: preferred_filter_height: {preferred_filter_height}") # DEBUG
+
+        # Si vamos a expandir (es decir, _filters_visible es False actualmente), 
+        # ocultamos el widget de nuevo para que la animación de expansión parta de un estado oculto/altura 0.
+        if not self._filters_visible:
+            self.filter_options_widget.hide()
+            print("DEBUG: filter_options_widget hidden again as we are about to expand.") # DEBUG
+
+        current_filter_container_height = self.filter_options_widget.height()
+        # Nota: si el widget está oculto, height() podría ser 0.
+        print(f"DEBUG: current_filter_container_height (actual, could be 0 if hidden): {current_filter_container_height}") # DEBUG
+
+        if self._filters_visible:  # Ocultar filtros (estado actual es visible, vamos a ocultar)
+            print("DEBUG: Setting up HIDE animation.") # DEBUG
+            target_container_height = 0
+            target_opacity = 0.0
+            
+            # Animación de altura del contenedor de filtros
+            height_animation = QPropertyAnimation(self.filter_options_widget, b"maximumHeight")
+            height_animation.setDuration(height_anim_duration)
+            height_animation.setStartValue(preferred_filter_height) # Al ocultar, partimos de la altura completa
+            height_animation.setEndValue(target_container_height)
+            height_animation.setEasingCurve(QEasingCurve.Type.InQuad)
+            self.animation_group.addAnimation(height_animation)
+
+            # Animaciones de opacidad para cada checkbox (en orden inverso para ocultar)
+            for i, item_data in enumerate(reversed(self.filter_checkboxes_effects)):
+                opacity_anim = QPropertyAnimation(item_data["effect"], b"opacity")
+                opacity_anim.setDuration(opacity_anim_duration) 
+                opacity_anim.setStartValue(item_data["effect"].opacity()) 
+                opacity_anim.setEndValue(target_opacity)
+                opacity_anim.setEasingCurve(QEasingCurve.Type.InSine)
+                self.animation_group.addAnimation(opacity_anim)
+            print(f"DEBUG: Added {len(self.filter_checkboxes_effects)} opacity animations for HIDE.") # DEBUG
+            
+            try: self.animation_group.finished.disconnect(self._on_filter_animation_group_finished)
+            except RuntimeError: pass
+            self.animation_group.finished.connect(self._on_filter_animation_group_finished)
+
+        else:  # Mostrar filtros (estado actual es oculto, vamos a mostrar)
+            print("DEBUG: Setting up SHOW animation.") # DEBUG
+            if preferred_filter_height <= 0:
+                print("ERROR: preferred_filter_height is 0 or less, cannot show filters effectively.") # DEBUG
+                # Podríamos retornar aquí o usar una altura de fallback, pero es mejor arreglar el cálculo.
+                return 
+            
+            target_container_height = preferred_filter_height
+            target_opacity = 1.0
+            self.filter_options_widget.show() # Mostrar el contenedor antes de animar su altura
+            self.filter_options_widget.setMaximumHeight(0) # Asegurar que empiece desde 0 para la animación de altura
+
+            # Animación de altura del contenedor de filtros
+            height_animation = QPropertyAnimation(self.filter_options_widget, b"maximumHeight")
+            height_animation.setDuration(height_anim_duration)
+            height_animation.setStartValue(0) # Empezar desde altura 0
+            height_animation.setEndValue(target_container_height)
+            height_animation.setEasingCurve(QEasingCurve.Type.OutQuad)
+            self.animation_group.addAnimation(height_animation)
+
+            # Animaciones de opacidad para cada checkbox
+            for i, item_data in enumerate(self.filter_checkboxes_effects):
+                item_data["effect"].setOpacity(0.0) # Asegurar que parten de 0
+                opacity_anim = QPropertyAnimation(item_data["effect"], b"opacity")
+                opacity_anim.setDuration(opacity_anim_duration) 
+                opacity_anim.setStartValue(0.0)
+                opacity_anim.setEndValue(target_opacity)
+                opacity_anim.setEasingCurve(QEasingCurve.Type.OutSine)
+                self.animation_group.addAnimation(opacity_anim)
+            print(f"DEBUG: Added {len(self.filter_checkboxes_effects)} opacity animations for SHOW.") # DEBUG
+            
+            try: self.animation_group.finished.disconnect(self._on_filter_animation_group_finished)
+            except RuntimeError: pass
+            # No conectamos finished al mostrar, el _on_filter_animation_group_finished es para el post-ocultar
+
+        print(f"DEBUG: Starting animation_group. Current _filters_visible: {self._filters_visible}, will become {not self._filters_visible}") # DEBUG
+        self.animation_group.start()
+        self._filters_visible = not self._filters_visible
+
+    def _on_filter_animation_group_finished(self):
+        print("--- _on_filter_animation_group_finished called ---") # DEBUG
+        print(f"Current _filters_visible: {self._filters_visible}") # DEBUG
+        # Este slot se llama cuando el QParallelAnimationGroup ha terminado
+        if not self._filters_visible: # Si el estado final es no visible, ocultar el contenedor
+            self.filter_options_widget.hide()
+            # Resetear opacidades a 0 para la próxima vez que se muestren
+            for item_data in self.filter_checkboxes_effects:
+                item_data["effect"].setOpacity(0.0)
+        
+        # Desconectar la señal para que no se llame múltiples veces (opcional, pero buena práctica)
+        # Esto podría no ser necesario si el grupo se limpia cada vez.
+        # try:
+        #     self.animation_group.finished.disconnect(self._on_filter_animation_group_finished)
+        # except RuntimeError: 
+        #     pass
 
     def _crear_tarjeta(self, titulo_str, opciones_data, ancho, alto, con_titulo=True):
         """
@@ -871,7 +925,7 @@ class VentanaGestionLibreria(QMainWindow):
             except RuntimeError: pass
 
         anim_next_page_slide_in.finished.connect(transition_finished)
-
+        
         anim_current_page_slide_out.start()
         anim_next_page_slide_in.start()
 
@@ -1033,197 +1087,4 @@ class VentanaGestionLibreria(QMainWindow):
             if self.inactivity_timer.isActive(): # Solo reiniciar si está activo
                 self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS) # Reinicia con el intervalo completo
 
-        # Cerrar el widget de filtros si se hace clic fuera de él
-        if hasattr(self, 'filter_widget') and self.filter_widget.isVisible() and event.type() == QEvent.Type.MouseButtonPress:
-            if not self.filter_widget.geometry().contains(event.globalPosition().toPoint()):
-                # Y si el clic no fue sobre el icono que lo abre
-                clicked_widget = QApplication.widgetAt(event.globalPosition().toPoint())
-                if hasattr(self, 'menu_icon_label_ref') and clicked_widget != self.menu_icon_label_ref:
-                    self.filter_widget.hide()
-                    self.filter_widget_close_timer.stop() # Detener timer
-                elif not hasattr(self, 'menu_icon_label_ref'): # Si no tenemos referencia, ocultamos igual
-                    self.filter_widget.hide()
-                    self.filter_widget_close_timer.stop() # Detener timer
-                    
-        # Manejo de eventos Enter/Leave para el widget de filtros
-        if obj == self.filter_widget:
-            if event.type() == QEvent.Type.Enter:
-                self.filter_widget_close_timer.stop()
-            elif event.type() == QEvent.Type.Leave:
-                self.filter_widget_close_timer.start()
-                    
-        return super().eventFilter(obj, event)
-
-    # --- Métodos para el widget de filtros ---
-    def _crear_widget_filtros(self):
-        """Crea el widget flotante para las opciones de filtro."""
-        self.filter_widget = QFrame(self) # Padre es la ventana principal para superposición
-        self.filter_widget.setObjectName("filterPopupContainer") # Renombrado para claridad
-        self.filter_widget.setWindowFlags(Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
-        self.filter_widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground) # Hacer el contenedor del popup transparente
-        self.filter_widget.setStyleSheet("QFrame#filterPopupContainer { background-color: transparent; }") # Asegurar transparencia
-
-        # Contenedor interno que tendrá el estilo de tarjeta y el contenido real
-        styled_content_frame = QFrame(self.filter_widget)
-        styled_content_frame.setObjectName("filterStyledContent")
-        styled_content_frame.setStyleSheet(""" 
-            QFrame#filterStyledContent {
-                background-color: rgba(240, 242, 245, 0.96); /* Aumentamos opacidad (antes 85) */ 
-                border-radius: 18px; /* Radio ligeramente menor para evitar artefactos */
-                border: 1px solid rgba(180, 180, 180, 0.9); /* Borde un poco más visible y opaco */
-                padding: 12px; /* Reducido un poco el padding */
-            }
-            QLabel#filterTitleLabel { /* Selector específico para el título */
-                background-color: transparent;
-                color: #222; /* Color de texto más oscuro para el título */
-                padding-bottom: 5px; /* Espacio debajo del título */
-            }
-            QLabel { /* Estilo general para etiquetas de filtro */
-                background-color: transparent;
-                color: #333;
-                padding-left: 3px; /* Espacio entre etiqueta y toggle */
-            }
-            /* No necesitamos QCheckBox aquí ahora */
-        """)
-        
-        filter_layout = QVBoxLayout(styled_content_frame)
-        filter_layout.setContentsMargins(8, 8, 8, 8) 
-        filter_layout.setSpacing(10) # Aumentar espaciado entre filas de filtro
-
-        title_label = QLabel("Filtros de Búsqueda")
-        title_label.setObjectName("filterTitleLabel") # Para estilo específico
-        font_titulo_seccion = QFont(self.font_family, FONTS["size_medium"], QFont.Weight.Bold)
-        title_label.setFont(font_titulo_seccion)
-        filter_layout.addWidget(title_label)
-
-        # Crear filtros con ToggleButton
-        filter_options = [
-            ("Por Categoría", "filter_category_toggle"),
-            ("Por Autor", "filter_author_toggle"),
-            ("Por Título", "filter_title_toggle")
-        ]
-
-        for text, attr_name in filter_options:
-            row_layout = QHBoxLayout()
-            row_layout.setSpacing(8)
-            
-            label = QLabel(text)
-            label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-            
-            toggle_button = ToggleButton(self) # Usar colores por defecto o personalizarlos
-            # toggle_button.setFixedSize(50,25) # Ajustar tamaño si es necesario
-            setattr(self, attr_name, toggle_button) # Guardar referencia si es necesario
-
-            row_layout.addWidget(label)
-            row_layout.addStretch(1) # Empuja el toggle a la derecha
-            row_layout.addWidget(toggle_button)
-            filter_layout.addLayout(row_layout)
-
-
-        apply_button = CustomButton(text="Aplicar") 
-        apply_button.setFixedHeight(30) 
-        apply_button.setFixedWidth(100) 
-        # apply_button.clicked.connect(self._aplicar_filtros)
-        
-        # Layout para centrar el botón
-        button_container_layout = QHBoxLayout()
-        button_container_layout.addStretch(1)
-        button_container_layout.addWidget(apply_button)
-        button_container_layout.addStretch(1)
-        filter_layout.addLayout(button_container_layout)
-
-        popup_main_layout = QVBoxLayout(self.filter_widget)
-        popup_main_layout.setContentsMargins(0,0,0,0) 
-        popup_main_layout.addWidget(styled_content_frame)
-        
-        # Ajustar el tamaño del popup para que se ajuste al contenido.
-        # styled_content_frame.adjustSize() # Intentar que el contenido defina el tamaño
-        # self.filter_widget.adjustSize()  # Luego el popup se ajusta al contenido
-        # O mantener un tamaño fijo si `adjustSize` no funciona como se espera con popups.
-        self.filter_widget.setFixedSize(260, 200) # Ajustar según sea necesario
-
-
-        self.filter_widget.hide() 
-        self.filter_widget.installEventFilter(self)
-
-    def _toggle_filter_widget(self, event=None):
-        """Muestra u oculta el widget de filtros."""
-        if self.filter_widget.isVisible():
-            self.filter_widget.hide()
-            self.filter_widget_close_timer.stop() # Detener timer si se oculta manualmente
-        else:
-            # Necesitamos el menu_icon_label para posicionar el widget
-            # Esto es un poco complicado porque menu_icon_label se crea en _crear_barra_busqueda
-            # y no es un atributo de la clase directamente.
-            # Vamos a buscarlo. Esto es frágil; sería mejor guardar una referencia.
-            
-            # Alternativa: Guardar referencia a menu_icon_label
-            # En _crear_barra_busqueda, hacer: self.menu_icon_label_finanzas = menu_icon_label
-            # Y aquí usar self.menu_icon_label_finanzas.
-            
-            # Por ahora, intentaremos posicionarlo de forma genérica cerca de la barra de búsqueda
-            # o asumimos que el search_bar_widget_finanzas es el referente.
-            
-            # Para una mejor solución, almacenaremos la referencia al ícono del menú.
-            # Modificaré _crear_barra_busqueda para almacenar self.menu_icon_label_ref
-
-            if hasattr(self, 'menu_icon_label_ref') and self.menu_icon_label_ref:
-                menu_icon = self.menu_icon_label_ref
-                # Calcular posición global del icono
-                global_pos = menu_icon.mapToGlobal(QPoint(0,0))
-                
-                # Posicionar el widget de filtros debajo del icono
-                # Ajustar los offsets (0, menu_icon.height() + 5) según sea necesario
-                self.filter_widget.move(global_pos.x(), global_pos.y() + menu_icon.height() + 5)
-            else:
-                # Fallback: posicionar cerca de la barra de búsqueda si la referencia no está.
-                # Esto requeriría que search_bar_widget_finanzas sea un atributo de self.
-                # Por ahora, lo posicionaremos en un lugar fijo si no encontramos el icono.
-                search_bar_geometry = self.search_input.parentWidget().geometry() # El contenedor de la barra
-                parent_pos = self.search_input.parentWidget().mapToGlobal(QPoint(0,0))
-                self.filter_widget.move(parent_pos.x() + search_bar_geometry.width() - self.filter_widget.width() - 5, 
-                                        parent_pos.y() + search_bar_geometry.height() + 5)
-
-
-            self.filter_widget.show()
-            self.filter_widget.raise_() # Asegurar que esté por encima
-
-    def _auto_close_filter_widget(self):
-        """Cierra el widget de filtros automáticamente si el timer expira."""
-        if self.filter_widget.isVisible():
-            self.filter_widget.hide()
-            # El timer es single shot, se detiene solo, pero por si acaso
-            self.filter_widget_close_timer.stop()
-
-    # Evento para cerrar el popup si se hace clic fuera (opcional pero recomendado)
-    def eventFilter(self, obj, event):
-        # Reinicia el temporizador de inactividad en cualquier evento de mouse o teclado
-        if event.type() in [
-            QEvent.Type.MouseMove,
-            QEvent.Type.KeyPress,
-            QEvent.Type.MouseButtonPress,
-            QEvent.Type.MouseButtonRelease
-        ]:
-            if self.inactivity_timer.isActive(): # Solo reiniciar si está activo
-                self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS) # Reinicia con el intervalo completo
-
-        # Cerrar el widget de filtros si se hace clic fuera de él
-        if self.filter_widget.isVisible() and event.type() == QEvent.Type.MouseButtonPress:
-            if not self.filter_widget.geometry().contains(event.globalPosition().toPoint()):
-                # Y si el clic no fue sobre el icono que lo abre
-                clicked_widget = QApplication.widgetAt(event.globalPosition().toPoint())
-                if hasattr(self, 'menu_icon_label_ref') and clicked_widget != self.menu_icon_label_ref:
-                    self.filter_widget.hide()
-                    self.filter_widget_close_timer.stop() # Detener timer
-                elif not hasattr(self, 'menu_icon_label_ref'): # Si no tenemos referencia, ocultamos igual
-                    self.filter_widget.hide()
-                    self.filter_widget_close_timer.stop() # Detener timer
-                    
-        # Manejo de eventos Enter/Leave para el widget de filtros
-        if obj == self.filter_widget:
-            if event.type() == QEvent.Type.Enter:
-                self.filter_widget_close_timer.stop()
-            elif event.type() == QEvent.Type.Leave:
-                self.filter_widget_close_timer.start()
-                    
         return super().eventFilter(obj, event) 
