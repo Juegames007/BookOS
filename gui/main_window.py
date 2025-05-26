@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QLineEdit, QStackedWidget, QListWidget, QAbstractScrollArea, QScrollArea, QCheckBox, QGraphicsOpacityEffect, QGridLayout
 )
 from PySide6.QtGui import QFont, QPixmap, QPainter, QIcon
-from PySide6.QtCore import Qt, QPoint, QSize, QEasingCurve, QPropertyAnimation, QRect, QTimer, QEvent, QParallelAnimationGroup
+from PySide6.QtCore import Qt, QPoint, QSize, QEasingCurve, QPropertyAnimation, QRect, QTimer, QEvent, QParallelAnimationGroup, Signal
 from typing import List, Dict, Any
 
 from app.dependencies import DependencyFactory
@@ -20,6 +20,8 @@ from gui.common.widgets import CustomButton
 from gui.common.styles import BACKGROUND_IMAGE_PATH, FONTS
 from gui.dialogs.add_book_dialog import AddBookDialog
 from gui.dialogs.search_book_dialog import SearchBookDialog
+from gui.components.paginated_results_widget import PaginatedResultsWidget
+from gui.components.menu_section_widget import MenuSectionWidget
 from features.book_service import BookService
 
 def accion_pendiente(nombre_accion, parent_window=None):
@@ -36,24 +38,24 @@ def accion_pendiente(nombre_accion, parent_window=None):
     if nombre_accion == "Agregar Libro":
         # Obtener dependencias necesarias para el diálogo
         data_manager = DependencyFactory.get_data_manager()
-        book_info_service = DependencyFactory.get_book_info_service()
+        book_info_fetcher = DependencyFactory.get_book_info_service()
         
-        # Crear servicio de libros
-        book_service = BookService(data_manager, book_info_service)
+        # Crear servicio de libros correctamente
+        actual_book_service = BookService(data_manager, book_info_fetcher)
         
         # Crear y mostrar el diálogo inyectando el servicio
-        dialog = AddBookDialog(book_service, parent_window)
+        dialog = AddBookDialog(actual_book_service, parent_window)
         dialog.exec()
     elif nombre_accion == "Buscar Libro":
         # Obtener dependencias necesarias para el diálogo
         data_manager = DependencyFactory.get_data_manager()
-        book_info_service = DependencyFactory.get_book_info_service()
+        book_info_fetcher = DependencyFactory.get_book_info_service()
         
-        # Crear servicio de libros
-        book_service = BookService(data_manager, book_info_service)
+        # Crear servicio de libros correctamente
+        actual_book_service = BookService(data_manager, book_info_fetcher)
         
         # Crear y mostrar el diálogo inyectando el servicio
-        dialog = SearchBookDialog(book_service, parent_window)
+        dialog = SearchBookDialog(actual_book_service, parent_window)
         dialog.exec()
     else:
         QMessageBox.information(parent_window, "Acción Pendiente",
@@ -70,15 +72,15 @@ class VentanaGestionLibreria(QMainWindow):
     
     Cada tarjeta contiene botones para las acciones específicas de esa sección.
     """
-    # Constantes para la vista de resultados tipo tabla
-    RESULT_TABLE_WIDTH = 600      # Ancho de una tabla de resultados completa (AUMENTADO)
-    HEADER_ROW_HEIGHT = 30       # Altura de la fila de cabecera
-    BOOK_ROW_HEIGHT = 40         # Altura de una fila de libro (reducida)
-    MAX_BOOK_ROWS_PER_TABLE = 12 # Máximo de filas de libros por tabla (ajustable AHORA 12)
-    TABLES_PER_PAGE = 2          # Número de tablas de resultados por página
-    CELL_SPACING = 5             # Espacio entre celdas en una fila
-    ROW_SPACING = 5              # Espacio entre filas en una tabla (entre cabecera y primera fila, y entre filas de datos)
-    TABLE_CELL_PADDING = 5       # Padding dentro de cada celda individual
+    # Constantes de clase que ya no son necesarias aquí (movidas a los componentes)
+    # RESULT_TABLE_WIDTH = 600      
+    # HEADER_ROW_HEIGHT = 30       
+    # BOOK_ROW_HEIGHT = 40         
+    # MAX_BOOK_ROWS_PER_TABLE = 12 
+    # TABLES_PER_PAGE = 2          
+    # CELL_SPACING = 5             
+    # ROW_SPACING = 5              
+    # TABLE_CELL_PADDING = 5       
     INACTIVITY_TIMEOUT_MS = 60000  # 1 minuto
 
     def __init__(self):
@@ -89,23 +91,8 @@ class VentanaGestionLibreria(QMainWindow):
 
         # Obtener el servicio de libros
         data_manager = DependencyFactory.get_data_manager()
-        book_info_service = DependencyFactory.get_book_info_service()
-        self.book_service = BookService(data_manager, book_info_service)
-
-        # Atributos para la barra de búsqueda expandible y filtros
-        self.search_bar_base_height = 55 
-        self.search_bar_expanded_height = 0 # Se calculará dinámicamente
-        self._filters_visible = False
-        self.filter_checkboxes_effects = [] # Para guardar checkboxes y sus efectos
-        self.animation_group = QParallelAnimationGroup(self) # Grupo de animación principal
-
-        # Atributos para paginación de resultados
-        self.current_results_page_index = 0
-        self.total_results_pages = 0
-        self.results_pages_stack = None # Se inicializará en _crear_vista_resultados_busqueda
-        self.boton_anterior_resultados = None
-        self.boton_siguiente_resultados = None
-        self.current_results_animation_group = [] # Para animaciones de páginas de resultados
+        book_info_fetcher = DependencyFactory.get_book_info_service()
+        self.book_service = BookService(data_manager, book_info_fetcher)
 
         # Configurar tamaño y posición inicial
         target_width = 1366  # Ancho suficiente para 3 columnas de 300px + espaciados
@@ -131,11 +118,30 @@ class VentanaGestionLibreria(QMainWindow):
 
         # Crear el widget del menú principal (lo que antes era central_widget)
         self.main_menu_widget = QWidget()
-        self.root_layout_main_menu = QVBoxLayout(self.main_menu_widget) # Layout para el contenido del menú
-        self.root_layout_main_menu.setContentsMargins(20, 20, 20, 20)
+        self.root_layout_main_menu = QVBoxLayout(self.main_menu_widget)
+        self.root_layout_main_menu.setContentsMargins(20, 125, 20, 20)
+        self.root_layout_main_menu.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+
+        self.title_label = QLabel("BookOS")
+        title_font = QFont(self.font_family, FONTS.get("size_xlarge", 20), QFont.Weight.Bold)
+        self.title_label.setFont(title_font)
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.title_label.setStyleSheet("QLabel { color: black; background-color: transparent; padding-bottom: 10px; }")
+        self.root_layout_main_menu.addWidget(self.title_label)
+
+        self.root_layout_main_menu.addSpacerItem(QSpacerItem(0, 100, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed))
+
+        # Crear el contenido del menú principal usando el nuevo MenuSectionWidget
+        self.main_menu_content = MenuSectionWidget()
+        self.main_menu_content.action_triggered.connect(self._handle_menu_action)
+        self.main_menu_content.search_requested.connect(self._iniciar_busqueda_desde_componente)
+        self.root_layout_main_menu.addWidget(self.main_menu_content)
+        
+        self.root_layout_main_menu.addStretch(1)
         
         # Crear el widget de resultados de búsqueda
-        self.search_results_widget = self._crear_vista_resultados_busqueda()
+        self.search_results_widget = PaginatedResultsWidget()
+        self.search_results_widget.back_to_menu_requested.connect(self._mostrar_menu_principal_animado)
 
         # Añadir los widgets al QStackedWidget
         self.stacked_widget.addWidget(self.main_menu_widget)
@@ -169,810 +175,25 @@ class VentanaGestionLibreria(QMainWindow):
         # Instalar filtro de eventos para detectar actividad
         self.installEventFilter(self)
 
+        self.animation_group = QParallelAnimationGroup(self) # Grupo de animación principal para transiciones de main_window
+
     def _setup_ui_normal(self):
-        """Configura la interfaz de usuario normal (con fondo) en el main_menu_widget."""
-        overall_content_widget = QWidget()
-        layout_overall_content = QVBoxLayout(overall_content_widget)
-        layout_overall_content.setContentsMargins(0, 0, 0, 0)
-        layout_overall_content.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-        layout_overall_content.addSpacerItem(QSpacerItem(20, 15, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed))
-
-        # Título
-        title_label = QLabel("Gestión Librería")
-        title_font = QFont(self.font_family, FONTS["size_xlarge"], QFont.Weight.Bold)
-        title_label.setFont(title_font)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("QLabel { color: black; background-color: transparent; padding-bottom: 10px; }")
-        layout_overall_content.addWidget(title_label)
-
-        layout_overall_content.addSpacerItem(QSpacerItem(20, 60, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed))
-
-        # Contenedor para las tarjetas
-        cards_holder_widget = QWidget()
-        cards_holder_widget.setStyleSheet("QWidget { background: transparent; }")
-        layout_cards_holder = QHBoxLayout(cards_holder_widget)
-        layout_cards_holder.setContentsMargins(0, 0, 0, 0)
-        layout_cards_holder.setSpacing(25)  # Espacio horizontal entre columnas
-        layout_cards_holder.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
-
-        # Configuraciones para las tarjetas
-        card_width = 300
-        main_card_height = 280
-        extra_card_height = 160  # Para las tarjetas invisibles de relleno
-        card_spacing = 15  # Espaciado vertical DENTRO de una columna
-
-        # --- Columna para Inventario ---
-        inventario_columna_widget = QWidget()
-        inventario_columna_widget.setStyleSheet("QWidget { background: transparent; }")
-        layout_inventario_columna = QVBoxLayout(inventario_columna_widget)
-        layout_inventario_columna.setContentsMargins(0, 0, 0, 0)
-        layout_inventario_columna.setSpacing(card_spacing)
-
-        opciones_inventario_main = [
-            {"icon": "agregar.png", "text": "  Agregar Libro", "action": "Agregar Libro"},
-            {"icon": "buscar.png", "text": "  Buscar Libro", "action": "Buscar Libro"},
-            {"icon": "modificar.png", "text": "  Modificar Libro", "action": "Modificar Libro"}
-        ]
-
-        inventario_card_principal = self._crear_tarjeta(
-            "Inventario",
-            opciones_inventario_main,
-            card_width,
-            main_card_height
-        )
-        layout_inventario_columna.addWidget(inventario_card_principal)
-
-        # Tarjeta invisible de relleno para Inventario
-        inventario_card_relleno_invisible = self._crear_tarjeta(
-            None, [], card_width, extra_card_height, con_titulo=False
-        )
-        inventario_card_relleno_invisible.setVisible(False)
-        layout_inventario_columna.addWidget(inventario_card_relleno_invisible)
-
-        layout_inventario_columna.addStretch(1)
-        layout_cards_holder.addWidget(inventario_columna_widget)
-
-        # --- Columna para Finanzas ---
-        finanzas_columna_widget = QWidget()
-        finanzas_columna_widget.setStyleSheet("QWidget { background: transparent; }")
-        layout_finanzas_columna = QVBoxLayout(finanzas_columna_widget)
-        layout_finanzas_columna.setContentsMargins(0, 0, 0, 0)
-        layout_finanzas_columna.setSpacing(card_spacing)
-
-        # --- Barra de búsqueda para la columna de Finanzas ---
-        search_bar_widget_finanzas = self._crear_barra_busqueda(card_width) # Usar card_width
-        layout_finanzas_columna.addWidget(search_bar_widget_finanzas)
-
-        opciones_finanzas_main = [
-            {"icon": "vender.png", "text": "  Vender Libro", "action": "Vender Libro"},
-            {"icon": "ingreso.png", "text": "  Reportar Ingreso", "action": "Reportar Ingreso"},
-            {"icon": "gasto.png", "text": "  Reportar Gasto", "action": "Reportar Gasto"},
-        ]
-        finanzas_card_principal = self._crear_tarjeta(
-            "Finanzas",
-            opciones_finanzas_main,
-            card_width,
-            main_card_height
-        )
-        layout_finanzas_columna.addWidget(finanzas_card_principal)
-
-        opciones_finanzas_extra = [
-            {"icon": "contabilidad.png", "text": "  Generar Contabilidad", "action": "Generar Contabilidad"},
-            {"icon": "pedidos.png", "text": "  Generar Pedidos", "action": "Generar Pedidos"}
-        ]
-        finanzas_card_extra = self._crear_tarjeta(
-            None,
-            opciones_finanzas_extra,
-            card_width,
-            extra_card_height,
-            con_titulo=False
-        )
-        layout_finanzas_columna.addWidget(finanzas_card_extra)
-
-        layout_finanzas_columna.addStretch(1)
-        layout_cards_holder.addWidget(finanzas_columna_widget)
-
-        # --- Columna para Ajustes ---
-        ajustes_columna_widget = QWidget()
-        ajustes_columna_widget.setStyleSheet("QWidget { background: transparent; }")
-        layout_ajustes_columna = QVBoxLayout(ajustes_columna_widget)
-        layout_ajustes_columna.setContentsMargins(0, 0, 0, 0)
-        layout_ajustes_columna.setSpacing(card_spacing)
-
-        opciones_ajustes_main = [
-            {"icon": "ajustes_finanzas.png", "text": "  Modificar Finanzas", "action": "Modificar Finanzas"},
-            {"icon": "eliminar.png", "text": "  Eliminar Libro", "action": "Eliminar Libro"},
-            {"icon": "salir.png", "text": "  Salir", "action": "SALIR_APP"}
-        ]
-
-        ajustes_card_principal = self._crear_tarjeta(
-            "Ajustes",
-            opciones_ajustes_main,
-            card_width,
-            main_card_height
-        )
-        layout_ajustes_columna.addWidget(ajustes_card_principal)
-
-        # Tarjeta invisible de relleno para Ajustes
-        ajustes_card_relleno_invisible = self._crear_tarjeta(
-            None, [], card_width, extra_card_height, con_titulo=False
-        )
-        ajustes_card_relleno_invisible.setVisible(False)
-        layout_ajustes_columna.addWidget(ajustes_card_relleno_invisible)
-
-        layout_ajustes_columna.addStretch(1)
-        layout_cards_holder.addWidget(ajustes_columna_widget)
-
-        layout_overall_content.addWidget(cards_holder_widget)
-        layout_overall_content.addStretch(1)
-
-        self.root_layout_main_menu.addStretch(1) # Ahora se añade al layout del main_menu_widget
-        self.root_layout_main_menu.addWidget(overall_content_widget, 0, Qt.AlignmentFlag.AlignHCenter)
-        self.root_layout_main_menu.addStretch(1)
-
-    def _crear_barra_busqueda(self, ancho: int):
-        self.search_bar_container = QFrame() # Hacerlo atributo de instancia
-        self.search_bar_container.setObjectName("searchBarContainer")
-        self.search_bar_container.setFixedWidth(ancho)
-        self.search_bar_container.setStyleSheet(f"""
-            QFrame#searchBarContainer {{
-                background-color: rgba(255, 255, 255, 90);
-                border-radius: 15px;
-                border: 1px solid rgba(200, 200, 200, 100);
-                /* La altura se manejará dinámicamente */
-            }}
-        """)
-
-        # Layout principal para la barra de búsqueda (vertical)
-        main_search_layout = QVBoxLayout(self.search_bar_container)
-        main_search_layout.setContentsMargins(0, 0, 0, 0) # Sin márgenes para el layout principal
-        main_search_layout.setSpacing(0) # Sin espaciado
-
-        # --- Sección superior de la barra de búsqueda (input y iconos) ---
-        top_search_widget = QWidget()
-        top_search_widget.setFixedHeight(self.search_bar_base_height) # Fijar altura de la parte superior
-        layout_top_search = QHBoxLayout(top_search_widget)
-        layout_top_search.setContentsMargins(15, 10, 15, 10) 
-        layout_top_search.setSpacing(10)
-
-        search_icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "imagenes", "buscar.png")
-        search_icon_label = QLabel()
-        if os.path.exists(search_icon_path):
-            search_pixmap = QPixmap(search_icon_path)
-            search_icon_label.setPixmap(search_pixmap.scaled(QSize(24,24), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        else:
-            search_icon_label.setText("?")
-            print(f"Advertencia: No se pudo cargar el icono de búsqueda en: {search_icon_path}")
-        search_icon_label.setStyleSheet("background-color: transparent; border: none;")
-
-        self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search")
-        self.search_input.setFixedHeight(35)
-        self.search_input.setFont(QFont(self.font_family, FONTS["size_medium"]))
-        self.search_input.setStyleSheet("""
-            QLineEdit {
-                background-color: transparent;
-                border: none;
-                color: #333;
-                padding-left: 5px;
-            }
-        """)
-        self.search_input.returnPressed.connect(self._iniciar_busqueda)
-        
-        menu_icon_label = QLabel("≡") 
-        menu_icon_font = QFont(self.font_family, FONTS["size_large"], QFont.Weight.Bold)
-        menu_icon_label.setFont(menu_icon_font)
-        menu_icon_label.setStyleSheet("background-color: transparent; border: none; color: #555;")
-        menu_icon_label.setCursor(Qt.CursorShape.PointingHandCursor)
-        menu_icon_label.mousePressEvent = self._toggle_filter_expansion # Conectar a nueva función
-        # self.menu_icon_label_ref = menu_icon_label # Ya no necesitamos la ref para el popup
-
-        layout_top_search.addWidget(search_icon_label)
-        layout_top_search.addWidget(self.search_input, 1)
-        layout_top_search.addWidget(menu_icon_label)
-        
-        main_search_layout.addWidget(top_search_widget)
-
-        # --- Sección de opciones de filtro (inicialmente oculta) ---
-        self.filter_options_widget = QWidget(self.search_bar_container)
-        self.filter_options_widget.setObjectName("filterOptionsWidget")
-        self.filter_options_widget.setStyleSheet(f"""
-            QWidget#filterOptionsWidget {{
-                background-color: transparent; /* Restaurar fondo transparente */
-            }}
-            QLabel {{
-                 background-color: transparent;
-                 color: #444; /* Color de texto para etiquetas de filtro */
-            }}
-            QCheckBox {{
-                background-color: #e0e0e0; /* Gris claro no seleccionado */
-                border: none;
-                border-radius: 8px; /* Radio de las esquinas ligeramente reducido */
-                padding: 5px 10px; /* Padding ajustado para iconos */
-                color: #333; /* Color de texto */
-                spacing: 5px; /* Espacio entre icono y texto */
-                font-size: {FONTS["size_small"]}px; /* Ligeramente más pequeño para acomodar dos por fila */
-                cursor: pointing-hand; /* Cursor de mano */
-                min-height: 18px; 
-            }}
-            QCheckBox:hover {{
-                background-color: #d0d0d0; /* Gris un poco más oscuro */
-            }}
-            QCheckBox:checked {{
-                background-color: #60a5fa; /* Azul claro/medio para seleccionado */
-                color: white; /* Texto blanco para contraste */
-                font-weight: bold;
-            }}
-            QCheckBox:checked:hover {{
-                background-color: #3b82f6; /* Azul un poco más oscuro e intenso */
-            }}
-            QCheckBox::indicator {{
-                width: 0px; /* Ocultar el indicador original */
-                height: 0px;
-            }}
-        """)
-        
-        # Layout contenedor principal para filter_options_widget para centrar el grid
-        outer_filter_layout = QHBoxLayout(self.filter_options_widget)
-        outer_filter_layout.setContentsMargins(0, 10, 0, 15) # (izquierda, arriba, derecha, abajo) - Añadido margen vertical
-        outer_filter_layout.setSpacing(0)
-
-        filter_options_grid_layout = QGridLayout()
-        # Márgenes del grid en sí (si fueran necesarios, pero el centrado es por outer_layout)
-        # filter_options_grid_layout.setContentsMargins(10, 5, 10, 10) 
-        filter_options_grid_layout.setHorizontalSpacing(10) # Espacio horizontal entre checkboxes
-        filter_options_grid_layout.setVerticalSpacing(10)   # Espacio vertical entre filas de checkboxes
-
-        # Crear checkboxes para los filtros
-        filter_data = [
-            ("Título", "filter_by_title_cb", "titulo.png"),
-            ("Autor", "filter_by_author_cb", "autor.png"),
-            ("Categoría", "filter_by_category_cb", "categoria.png")
-        ]
-        
-        icon_base_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "imagenes")
-        checkbox_icon_size = QSize(16, 16) # Tamaño para los iconos de los checkbox
-
-        self.filter_checkboxes_effects.clear() # Limpiar por si acaso se llama varias veces (aunque no debería)
-
-        row, col = 0, 0
-        for text, attr_name, icon_filename in filter_data:
-            checkbox = QCheckBox(text)
-            checkbox.setChecked(True)
-            
-            icon_path = os.path.join(icon_base_path, icon_filename)
-            if os.path.exists(icon_path):
-                pixmap = QPixmap(icon_path)
-                checkbox.setIcon(QIcon(pixmap))
-                checkbox.setIconSize(checkbox_icon_size)
-            else:
-                print(f"Advertencia: No se pudo cargar el icono del filtro: {icon_path}")
-            
-            opacity_effect = QGraphicsOpacityEffect(checkbox)
-            checkbox.setGraphicsEffect(opacity_effect)
-            opacity_effect.setOpacity(0.0) # Inicialmente invisibles
-            
-            filter_options_grid_layout.addWidget(checkbox, row, col)
-            self.filter_checkboxes_effects.append({"checkbox": checkbox, "effect": opacity_effect})
-            setattr(self, attr_name, checkbox)
-
-            col += 1
-            if col >= 3: # Máximo 3 checkboxes por fila
-                col = 0
-                row += 1
-        
-        outer_filter_layout.addStretch(1)
-        outer_filter_layout.addLayout(filter_options_grid_layout)
-        outer_filter_layout.addStretch(1)
-        
-        self.filter_options_widget.hide() # Oculto por defecto
-        main_search_layout.addWidget(self.filter_options_widget)
-        main_search_layout.addStretch(1) # Para que los filtros no ocupen espacio extra si el VBox es más grande
-
-        print(f"DEBUG _crear_barra_busqueda: hasattr filter_options_widget: {hasattr(self, 'filter_options_widget')}") # DEBUG
-        if hasattr(self, 'filter_options_widget'):
-            print(f"DEBUG _crear_barra_busqueda: filter_options_widget is {self.filter_options_widget}") # DEBUG
-        print(f"DEBUG _crear_barra_busqueda: filter_checkboxes_effects length: {len(self.filter_checkboxes_effects) if hasattr(self, 'filter_checkboxes_effects') else 'N/A'}") # DEBUG
-        print(f"DEBUG _crear_barra_busqueda: filter_checkboxes_effects content: {self.filter_checkboxes_effects if hasattr(self, 'filter_checkboxes_effects') else 'N/A'}") # DEBUG
-
-        return self.search_bar_container
-
-    def _toggle_filter_expansion(self, event=None):
-        print("--- _toggle_filter_expansion called ---") # DEBUG
-        print(f"Initial _filters_visible: {self._filters_visible}") # DEBUG
-
-        has_options_widget = hasattr(self, 'filter_options_widget')
-        checkbox_effects_exist_and_not_empty = hasattr(self, 'filter_checkboxes_effects') and bool(self.filter_checkboxes_effects)
-
-        print(f"DEBUG _toggle_filter_expansion: hasattr(self, 'filter_options_widget'): {has_options_widget}") # DEBUG
-        print(f"DEBUG _toggle_filter_expansion: hasattr(self, 'filter_checkboxes_effects'): {hasattr(self, 'filter_checkboxes_effects')}") # DEBUG
-        if hasattr(self, 'filter_checkboxes_effects'):
-            print(f"DEBUG _toggle_filter_expansion: bool(self.filter_checkboxes_effects): {bool(self.filter_checkboxes_effects)} (Length: {len(self.filter_checkboxes_effects)})") # DEBUG
-
-        if not has_options_widget or not checkbox_effects_exist_and_not_empty:
-            print(f"DEBUG: Condition MET. has_options_widget: {has_options_widget}, checkbox_effects_exist_and_not_empty: {checkbox_effects_exist_and_not_empty}. Returning.") # DEBUG
-            return
-
-        # Detener y limpiar animaciones anteriores del grupo
-        if self.animation_group.state() == QParallelAnimationGroup.State.Running:
-            print("DEBUG: Animation group was running. Stopping.") # DEBUG
-            self.animation_group.stop()
-        self.animation_group.clear() # Elimina todas las animaciones del grupo
-        print("DEBUG: Animation group cleared.") # DEBUG
-
-        # Duraciones y retrasos
-        height_anim_duration = 280  # Duración para la animación de altura del contenedor
-        opacity_anim_duration = 150 # Duración para la animación de opacidad de cada item
-        # delay_per_item = 50 # No se usa actualmente
-
-        # Calcular la altura total que necesitará el filter_options_widget
-        # Es importante mostrarlo para que su layout calcule el tamaño correctamente.
-        self.filter_options_widget.show() 
-        QApplication.processEvents() # Forzar el procesamiento para asegurar que el tamaño esté calculado
-        preferred_filter_height = self.filter_options_widget.sizeHint().height()
-        if preferred_filter_height <= 0: # Fallback si sizeHint no es suficiente
-            preferred_filter_height = self.filter_options_widget.layout().sizeHint().height()
-        print(f"DEBUG: preferred_filter_height: {preferred_filter_height}") # DEBUG
-
-        # Si vamos a expandir (es decir, _filters_visible es False actualmente), 
-        # ocultamos el widget de nuevo para que la animación de expansión parta de un estado oculto/altura 0.
-        if not self._filters_visible:
-            self.filter_options_widget.hide()
-            print("DEBUG: filter_options_widget hidden again as we are about to expand.") # DEBUG
-
-        current_filter_container_height = self.filter_options_widget.height()
-        # Nota: si el widget está oculto, height() podría ser 0.
-        print(f"DEBUG: current_filter_container_height (actual, could be 0 if hidden): {current_filter_container_height}") # DEBUG
-
-        if self._filters_visible:  # Ocultar filtros (estado actual es visible, vamos a ocultar)
-            print("DEBUG: Setting up HIDE animation.") # DEBUG
-            target_container_height = 0
-            target_opacity = 0.0
-            
-            # Animación de altura del contenedor de filtros
-            height_animation = QPropertyAnimation(self.filter_options_widget, b"maximumHeight")
-            height_animation.setDuration(height_anim_duration)
-            height_animation.setStartValue(preferred_filter_height) # Al ocultar, partimos de la altura completa
-            height_animation.setEndValue(target_container_height)
-            height_animation.setEasingCurve(QEasingCurve.Type.InQuad)
-            self.animation_group.addAnimation(height_animation)
-
-            # Animaciones de opacidad para cada checkbox (en orden inverso para ocultar)
-            for i, item_data in enumerate(reversed(self.filter_checkboxes_effects)):
-                opacity_anim = QPropertyAnimation(item_data["effect"], b"opacity")
-                opacity_anim.setDuration(opacity_anim_duration) 
-                opacity_anim.setStartValue(item_data["effect"].opacity()) 
-                opacity_anim.setEndValue(target_opacity)
-                opacity_anim.setEasingCurve(QEasingCurve.Type.InSine)
-                self.animation_group.addAnimation(opacity_anim)
-            print(f"DEBUG: Added {len(self.filter_checkboxes_effects)} opacity animations for HIDE.") # DEBUG
-            
-            try: self.animation_group.finished.disconnect(self._on_filter_animation_group_finished)
-            except RuntimeError: pass
-            self.animation_group.finished.connect(self._on_filter_animation_group_finished)
-
-        else:  # Mostrar filtros (estado actual es oculto, vamos a mostrar)
-            print("DEBUG: Setting up SHOW animation.") # DEBUG
-            if preferred_filter_height <= 0:
-                print("ERROR: preferred_filter_height is 0 or less, cannot show filters effectively.") # DEBUG
-                # Podríamos retornar aquí o usar una altura de fallback, pero es mejor arreglar el cálculo.
-                return 
-            
-            target_container_height = preferred_filter_height
-            target_opacity = 1.0
-            self.filter_options_widget.show() # Mostrar el contenedor antes de animar su altura
-            self.filter_options_widget.setMaximumHeight(0) # Asegurar que empiece desde 0 para la animación de altura
-
-            # Animación de altura del contenedor de filtros
-            height_animation = QPropertyAnimation(self.filter_options_widget, b"maximumHeight")
-            height_animation.setDuration(height_anim_duration)
-            height_animation.setStartValue(0) # Empezar desde altura 0
-            height_animation.setEndValue(target_container_height)
-            height_animation.setEasingCurve(QEasingCurve.Type.OutQuad)
-            self.animation_group.addAnimation(height_animation)
-
-            # Animaciones de opacidad para cada checkbox
-            for i, item_data in enumerate(self.filter_checkboxes_effects):
-                item_data["effect"].setOpacity(0.0) # Asegurar que parten de 0
-                opacity_anim = QPropertyAnimation(item_data["effect"], b"opacity")
-                opacity_anim.setDuration(opacity_anim_duration) 
-                opacity_anim.setStartValue(0.0)
-                opacity_anim.setEndValue(target_opacity)
-                opacity_anim.setEasingCurve(QEasingCurve.Type.OutSine)
-                self.animation_group.addAnimation(opacity_anim)
-            print(f"DEBUG: Added {len(self.filter_checkboxes_effects)} opacity animations for SHOW.") # DEBUG
-            
-            try: self.animation_group.finished.disconnect(self._on_filter_animation_group_finished)
-            except RuntimeError: pass
-            # No conectamos finished al mostrar, el _on_filter_animation_group_finished es para el post-ocultar
-
-        print(f"DEBUG: Starting animation_group. Current _filters_visible: {self._filters_visible}, will become {not self._filters_visible}") # DEBUG
-        self.animation_group.start()
-        self._filters_visible = not self._filters_visible
-
-    def _on_filter_animation_group_finished(self):
-        print("--- _on_filter_animation_group_finished called ---") # DEBUG
-        print(f"Current _filters_visible: {self._filters_visible}") # DEBUG
-        # Este slot se llama cuando el QParallelAnimationGroup ha terminado
-        if not self._filters_visible: # Si el estado final es no visible, ocultar el contenedor
-            self.filter_options_widget.hide()
-            # Resetear opacidades a 0 para la próxima vez que se muestren
-            for item_data in self.filter_checkboxes_effects:
-                item_data["effect"].setOpacity(0.0)
-        
-        # Desconectar la señal para que no se llame múltiples veces (opcional, pero buena práctica)
-        # Esto podría no ser necesario si el grupo se limpia cada vez.
-        # try:
-        #     self.animation_group.finished.disconnect(self._on_filter_animation_group_finished)
-        # except RuntimeError: 
-        #     pass
-
-    def _crear_tarjeta(self, titulo_str, opciones_data, ancho, alto, con_titulo=True):
+        """Configura la interfaz de usuario normal (con fondo) en el main_menu_widget.
+           Este método ahora principalmente añade el MenuSectionWidget.
         """
-        Crea una tarjeta con título y botones.
-        
-        Args:
-            titulo_str: Título de la tarjeta (None si no tiene título).
-            opciones_data: Lista de diccionarios con 'icon', 'text' y 'action' para los botones.
-            ancho: Ancho de la tarjeta.
-            alto: Alto de la tarjeta.
-            con_titulo: Si es True, muestra el título.
-            
-        Returns:
-            Un QFrame con la tarjeta configurada.
-        """
-        tarjeta = QFrame()
-        tarjeta.setFixedSize(ancho, alto)
-        tarjeta.setStyleSheet(f"""
-            QFrame {{
-                background-color: rgba(255, 255, 255, 80); 
-                border-radius: 25px;
-                border: 1px solid rgba(220, 220, 220, 70);
-            }}
-        """)
-        layout_tarjeta = QVBoxLayout(tarjeta)
+        # La lógica de crear tarjetas, columnas, search_bar_finanzas ya no está aquí.
+        # Se ha movido a MenuSectionWidget.
+        pass # El contenido se crea en __init__ y se añade al root_layout_main_menu
 
-        top_margin = 15  # Margen superior por defecto para tarjetas sin título con opciones
-        if con_titulo and titulo_str:
-            top_margin = 30
-        elif not con_titulo and not opciones_data:  # Tarjeta de relleno invisible
-            top_margin = 0  # O un valor pequeño si se prefiere, pero 0 para que sea solo espacio
-
-        layout_tarjeta.setContentsMargins(30, top_margin, 30, 30)
-        layout_tarjeta.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout_tarjeta.setSpacing(10)
-
-        if con_titulo and titulo_str:
-            titulo_seccion = QLabel(titulo_str)
-            font_titulo_seccion = QFont(self.font_family, FONTS["size_large"], QFont.Weight.Bold)
-            titulo_seccion.setFont(font_titulo_seccion)
-            titulo_seccion.setAlignment(Qt.AlignmentFlag.AlignLeft)
-            titulo_seccion.setStyleSheet("QLabel { color: black; background-color: transparent; padding-bottom: 10px; border: none; }")
-            layout_tarjeta.addWidget(titulo_seccion)
-
-        for item_data in opciones_data:
-            texto_visible_original = item_data["text"]
-            nombre_archivo_icono = item_data["icon"]
-            accion_definida = item_data["action"]
-
-            # Corregir la ruta del icono para que apunte al directorio app/imagenes
-            ruta_icono_completa = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "imagenes", nombre_archivo_icono)
-
-            boton_personalizado = CustomButton(icon_path=ruta_icono_completa, text=texto_visible_original.strip())
-
-            if accion_definida == "SALIR_APP":
-                boton_personalizado.clicked.connect(self.close)
-            else:
-                boton_personalizado.clicked.connect(lambda accion=accion_definida: accion_pendiente(accion, self))
-
-            layout_tarjeta.addWidget(boton_personalizado)
-
-        layout_tarjeta.addStretch(1)
-        return tarjeta
-
-    def _crear_vista_resultados_busqueda(self):
-        """Crea el widget para la vista de resultados de búsqueda con columnas dinámicas."""
-        widget = QWidget()
-        main_layout = QVBoxLayout(widget) 
-        main_layout.setContentsMargins(30, 30, 30, 30) 
-        main_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
-
-        self.search_term_label = QLabel("Resultados para: ...")
-        font_resultados = QFont(self.font_family, FONTS["size_large"], QFont.Weight.Bold)
-        self.search_term_label.setFont(font_resultados)
-        self.search_term_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.search_term_label.setStyleSheet("QLabel { color: black; background-color: transparent; padding-bottom: 20px; }")
-        main_layout.addWidget(self.search_term_label)
-
-        # Contenedor principal para las páginas de resultados (reemplaza QScrollArea)
-        self.results_pages_stack = QStackedWidget()
-        self.results_pages_stack.setStyleSheet("background-color: transparent;") # Para que se vea el fondo de la ventana
-        main_layout.addWidget(self.results_pages_stack, 1)
-
-        self.no_results_label = QLabel("No se encontraron libros que coincidan con tu búsqueda.")
-        self.no_results_label.setFont(QFont(self.font_family, FONTS["size_medium"]))
-        self.no_results_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.no_results_label.setStyleSheet("QLabel { color: #555; background-color: transparent; }")
-        self.no_results_label.setWordWrap(True)
-        self.no_results_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        main_layout.addWidget(self.no_results_label)
-        self.no_results_label.hide()
-
-        # Layout para botones de navegación de resultados y botón de volver al menú
-        navigation_and_back_layout = QHBoxLayout()
-        
-        # Construir rutas a los iconos
-        icon_base_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app", "imagenes")
-        anterior_icon_path = os.path.join(icon_base_path, "anterior.png")
-        siguiente_icon_path = os.path.join(icon_base_path, "siguiente.png")
-
-        self.boton_anterior_resultados = CustomButton(icon_path=anterior_icon_path, text="") # Usar icono y texto vacío
-        self.boton_anterior_resultados.clicked.connect(self._ir_a_pagina_anterior_resultados)
-        self.boton_anterior_resultados.setEnabled(False) # Inicialmente deshabilitado
-        # Podríamos querer ajustar el tamaño fijo si los iconos son muy grandes/pequeños
-        # self.boton_anterior_resultados.setFixedSize(QSize(40, 40)) # Ejemplo de tamaño
-        navigation_and_back_layout.addWidget(self.boton_anterior_resultados)
-
-        navigation_and_back_layout.addStretch(1) # Espaciador central
-
-        self.boton_volver_menu = CustomButton(text="Volver al Menú Principal")
-        self.boton_volver_menu.clicked.connect(self._mostrar_menu_principal_animado)
-        navigation_and_back_layout.addWidget(self.boton_volver_menu)
-
-        navigation_and_back_layout.addStretch(1) # Espaciador central
-
-        self.boton_siguiente_resultados = CustomButton(icon_path=siguiente_icon_path, text="") # Usar icono y texto vacío
-        self.boton_siguiente_resultados.clicked.connect(self._ir_a_pagina_siguiente_resultados)
-        self.boton_siguiente_resultados.setEnabled(False) # Inicialmente deshabilitado
-        # self.boton_siguiente_resultados.setFixedSize(QSize(40, 40)) # Ejemplo de tamaño
-        navigation_and_back_layout.addWidget(self.boton_siguiente_resultados)
-        
-        main_layout.addLayout(navigation_and_back_layout)
-
-        widget.setStyleSheet("background: transparent;")
-        return widget
-
-    def _iniciar_busqueda(self):
-        """Se llama cuando se presiona Enter en la barra de búsqueda."""
-        termino_busqueda = self.search_input.text().strip()
+    def _iniciar_busqueda_desde_componente(self, termino_busqueda: str, filtros: dict):
+        """Se llama cuando SearchBarWidget emite la señal search_requested."""
         if termino_busqueda:
-            print(f"Buscando: {termino_busqueda}")
-            # Llamar al servicio para buscar libros
+            print(f"Buscando (desde componente SearchBarWidget): {termino_busqueda}, Filtros: {filtros}")
             libros_encontrados = self.book_service.buscar_libros(termino_busqueda)
-            self._actualizar_display_resultados(libros_encontrados) # Actualizar la UI de resultados
+            self.search_results_widget.update_results(libros_encontrados, termino_busqueda)
             self._mostrar_vista_busqueda_animado(termino_busqueda)
         else:
-            print("Término de búsqueda vacío.")
-            # Opcional: podríamos limpiar la vista de resultados si el término es vacío
-            # y el usuario presiona enter, o simplemente no hacer nada.
-            # Por ahora, no hacemos nada si está vacío.
-
-    def _actualizar_display_resultados(self, libros: List[Dict[str, Any]]):
-        """Actualiza la vista de resultados creando páginas de tablas y gestionando la navegación."""
-        # Limpiar páginas antiguas del stack
-        while self.results_pages_stack.count():
-            widget = self.results_pages_stack.widget(0)
-            self.results_pages_stack.removeWidget(widget)
-            if widget:
-                widget.deleteLater()
-
-        self.current_results_page_index = 0
-        self.total_results_pages = 0
-
-        if not libros:
-            self.results_pages_stack.hide()
-            self.no_results_label.show()
-            self.boton_anterior_resultados.hide()
-            self.boton_siguiente_resultados.hide()
-        else:
-            self.no_results_label.hide()
-            self.results_pages_stack.show()
-            self.boton_anterior_resultados.show()
-            self.boton_siguiente_resultados.show()
-
-            column_weights = [1, 5, 4, 4]
-            headers = ["#", "Título", "Autor", "Categoría"]
-            cell_style_sheet = f"""
-                QFrame {{
-                    background-color: rgba(255, 255, 255, 0.45);
-                    border-radius: 6px;
-                    border: 1px solid rgba(255, 255, 255, 0.6);
-                }}
-                QLabel {{
-                    background-color: transparent;
-                    border: none;
-                    padding: {self.TABLE_CELL_PADDING}px;
-                }}
-            """
-            header_cell_style_sheet = f"""
-                QFrame {{
-                    background-color: rgba(235, 235, 245, 0.6);
-                    border-radius: 6px;
-                    border: 1px solid rgba(255, 255, 255, 0.5);
-                }}
-                QLabel {{
-                    background-color: transparent;
-                    border: none;
-                    padding: {self.TABLE_CELL_PADDING}px;
-                    font-weight: bold;
-                }}
-            """
-
-            num_libros = len(libros)
-            libros_por_pagina = self.MAX_BOOK_ROWS_PER_TABLE * self.TABLES_PER_PAGE
-            self.total_results_pages = (num_libros + libros_por_pagina - 1) // libros_por_pagina
-
-            libro_idx_global = 0
-            for page_num in range(self.total_results_pages):
-                page_widget = QWidget()
-                page_layout = QHBoxLayout(page_widget)
-                page_layout.setContentsMargins(0, 0, 0, 0)
-                page_layout.setSpacing(15) # Espacio entre tablas en una página
-                page_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-
-                for table_in_page_num in range(self.TABLES_PER_PAGE):
-                    if libro_idx_global >= num_libros:
-                        # Si no hay más libros para llenar los slots de esta página, salimos del loop de tablas.
-                        break 
-                    
-                    current_table_frame = QFrame()
-                    current_table_frame.setFixedWidth(self.RESULT_TABLE_WIDTH)
-                    current_table_layout = QVBoxLayout(current_table_frame)
-                    current_table_layout.setContentsMargins(self.ROW_SPACING, self.ROW_SPACING, self.ROW_SPACING, self.ROW_SPACING)
-                    current_table_layout.setSpacing(self.ROW_SPACING)
-                    current_table_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-                    
-                    # --- Fila de Cabecera con Celdas Individuales ---
-                    header_row_widget = QWidget()
-                    header_row_widget.setFixedHeight(self.HEADER_ROW_HEIGHT)
-                    header_row_layout = QHBoxLayout(header_row_widget)
-                    header_row_layout.setContentsMargins(0,0,0,0)
-                    header_row_layout.setSpacing(self.CELL_SPACING)
-                    for h_text, weight in zip(headers, column_weights):
-                        cell_frame = QFrame()
-                        cell_frame.setStyleSheet(header_cell_style_sheet)
-                        cell_layout = QVBoxLayout(cell_frame)
-                        cell_layout.setContentsMargins(0,0,0,0)
-                        lbl = QLabel(h_text)
-                        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                        lbl.setFont(QFont(self.font_family, FONTS["size_small"], QFont.Weight.Bold))
-                        lbl.setStyleSheet("color: #222; background-color:transparent;")
-                        cell_layout.addWidget(lbl)
-                        header_row_layout.addWidget(cell_frame, weight)
-                    current_table_layout.addWidget(header_row_widget)
-
-                    book_rows_in_current_table = 0
-                    while book_rows_in_current_table < self.MAX_BOOK_ROWS_PER_TABLE and libro_idx_global < num_libros:
-                        libro_data = libros[libro_idx_global]
-                        book_row_widget = QWidget() 
-                        book_row_widget.setFixedHeight(self.BOOK_ROW_HEIGHT)
-                        book_row_layout = QHBoxLayout(book_row_widget)
-                        book_row_layout.setContentsMargins(0,0,0,0)
-                        book_row_layout.setSpacing(self.CELL_SPACING)
-
-                        numero = libro_idx_global + 1
-                        titulo = libro_data.get("Título", "N/A")
-                        autor = libro_data.get("Autor", "N/A")
-                        categorias_list = libro_data.get("Categorías", [])
-                        categorias = ", ".join(categorias_list) if categorias_list else "-"
-                        data_fields = [str(numero), titulo, autor, categorias]
-
-                        for field_text, weight in zip(data_fields, column_weights):
-                            cell_frame = QFrame()
-                            cell_frame.setStyleSheet(cell_style_sheet)
-                            cell_layout = QVBoxLayout(cell_frame)
-                            cell_layout.setContentsMargins(0,0,0,0)
-                            lbl = QLabel(field_text)
-                            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                            lbl.setFont(QFont(self.font_family, FONTS["size_small"]-1))
-                            lbl.setWordWrap(True)
-                            lbl.setStyleSheet("color: #333; background-color:transparent;")
-                            cell_layout.addWidget(lbl)
-                            book_row_layout.addWidget(cell_frame, weight)
-                        
-                        current_table_layout.addWidget(book_row_widget)
-                        book_rows_in_current_table += 1
-                        libro_idx_global += 1
-                    
-                    current_table_layout.addStretch(1) # Estirar al final de la tabla
-                    page_layout.addWidget(current_table_frame) 
-                
-                # Si la página tiene al menos una tabla, añadirla al stack.
-                if page_layout.count() > 0: 
-                     self.results_pages_stack.addWidget(page_widget)
-                else:
-                    # Si esta página quedó vacía (no debería pasar si total_results_pages se calculó bien
-                    # y los libros se distribuyeron), no se añade.
-                    # El total_results_pages se ajustará al final basado en los widgets realmente añadidos.
-                    pass
-
-            # Actualizar total_results_pages basado en las páginas realmente añadidas
-            self.total_results_pages = self.results_pages_stack.count()
-
-            if self.total_results_pages > 0:
-                self.results_pages_stack.setCurrentIndex(0)
-            
-            self._actualizar_estado_botones_navegacion_resultados()
-
-    def _actualizar_estado_botones_navegacion_resultados(self):
-        if not self.results_pages_stack or self.total_results_pages == 0:
-            self.boton_anterior_resultados.setEnabled(False)
-            self.boton_anterior_resultados.hide()
-            self.boton_siguiente_resultados.setEnabled(False)
-            self.boton_siguiente_resultados.hide()
-            return
-
-        self.boton_anterior_resultados.show()
-        self.boton_siguiente_resultados.show()
-        self.boton_anterior_resultados.setEnabled(self.current_results_page_index > 0)
-        self.boton_siguiente_resultados.setEnabled(self.current_results_page_index < self.total_results_pages - 1)
-
-    def _ir_a_pagina_siguiente_resultados(self):
-        if self.current_results_page_index < self.total_results_pages - 1:
-            nuevo_indice = self.current_results_page_index + 1
-            self._mostrar_pagina_resultados_animado(nuevo_indice, direccion_forward=True)
-
-    def _ir_a_pagina_anterior_resultados(self):
-        if self.current_results_page_index > 0:
-            nuevo_indice = self.current_results_page_index - 1
-            self._mostrar_pagina_resultados_animado(nuevo_indice, direccion_forward=False)
-
-    def _mostrar_pagina_resultados_animado(self, nuevo_indice: int, direccion_forward: bool):
-        current_page_widget = self.results_pages_stack.widget(self.current_results_page_index)
-        next_page_widget = self.results_pages_stack.widget(nuevo_indice)
-
-        if not current_page_widget or not next_page_widget or current_page_widget == next_page_widget:
-            if next_page_widget: # Si es la misma página o algo raro, solo asegurar el índice
-                 self.results_pages_stack.setCurrentWidget(next_page_widget)
-                 self.current_results_page_index = nuevo_indice
-                 self._actualizar_estado_botones_navegacion_resultados()
-            return
-
-        rect_stacked = self.results_pages_stack.rect() 
-
-        # Posicionar la nueva página fuera de la pantalla
-        if direccion_forward:
-            next_page_widget.setGeometry(rect_stacked.width(), 0, rect_stacked.width(), rect_stacked.height())
-        else:
-            next_page_widget.setGeometry(-rect_stacked.width(), 0, rect_stacked.width(), rect_stacked.height())
-        
-        next_page_widget.show()
-        next_page_widget.raise_()
-
-        # Animación para la página actual (deslizándose hacia afuera)
-        anim_current_page_slide_out = QPropertyAnimation(current_page_widget, b"geometry")
-        anim_current_page_slide_out.setDuration(350) # Duración más corta para paginación
-        anim_current_page_slide_out.setEasingCurve(QEasingCurve.Type.InOutQuad)
-        anim_current_page_slide_out.setStartValue(current_page_widget.geometry())
-        end_x_current = -rect_stacked.width() if direccion_forward else rect_stacked.width()
-        anim_current_page_slide_out.setEndValue(QRect(end_x_current, 0, current_page_widget.width(), current_page_widget.height()))
-
-        # Animación para la nueva página (deslizándose hacia adentro)
-        anim_next_page_slide_in = QPropertyAnimation(next_page_widget, b"geometry")
-        anim_next_page_slide_in.setDuration(350)
-        anim_next_page_slide_in.setEasingCurve(QEasingCurve.Type.InOutQuad)
-        anim_next_page_slide_in.setStartValue(next_page_widget.geometry())
-        anim_next_page_slide_in.setEndValue(rect_stacked)
-
-        # Limpiar animaciones anteriores si existen
-        for anim in self.current_results_animation_group:
-            anim.stop()
-        self.current_results_animation_group = [anim_current_page_slide_out, anim_next_page_slide_in]
-
-        def transition_finished():
-            current_page_widget.hide()
-            self.results_pages_stack.setCurrentWidget(next_page_widget)
-            self.current_results_page_index = nuevo_indice
-            self._actualizar_estado_botones_navegacion_resultados()
-            self.current_results_animation_group = []
-            try:
-                anim_next_page_slide_in.finished.disconnect(transition_finished)
-            except RuntimeError: pass
-
-        anim_next_page_slide_in.finished.connect(transition_finished)
-
-        anim_current_page_slide_out.start()
-        anim_next_page_slide_in.start()
+            print("Término de búsqueda vacío (desde componente SearchBarWidget).")
 
     def _mostrar_vista_busqueda_animado(self, termino_busqueda):
         """Muestra la vista de resultados de búsqueda con animación."""
@@ -981,8 +202,6 @@ class VentanaGestionLibreria(QMainWindow):
 
         if current_widget == next_widget:
             return
-
-        self.search_term_label.setText(f"Resultados para: \"{termino_busqueda}\"")
 
         # 1. Posicionar next_widget fuera de la pantalla (a la derecha)
         # Asegurarse de que tenga el tamaño correcto que tendrá en el stack.
@@ -1071,11 +290,11 @@ class VentanaGestionLibreria(QMainWindow):
                 anim_next_slide_in_reverse.finished.disconnect(transition_reverse_finished)
             except RuntimeError: pass
             # Resetear estado de paginación de resultados al volver al menú
-            self.current_results_page_index = 0
-            self.total_results_pages = 0
-            if self.boton_anterior_resultados and self.boton_siguiente_resultados:
-                self.boton_anterior_resultados.hide()
-                self.boton_siguiente_resultados.hide()
+            # self.current_results_page_index = 0
+            # self.total_results_pages = 0
+            # if self.boton_anterior_resultados and self.boton_siguiente_resultados:
+            #    self.boton_anterior_resultados.hide()
+            #    self.boton_siguiente_resultados.hide()
              # Reiniciar el temporizador de inactividad al volver al menú
             if self.inactivity_timer.isActive():
                 self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS)
@@ -1116,9 +335,11 @@ class VentanaGestionLibreria(QMainWindow):
         # Navegación por flechas en la vista de resultados
         elif self.stacked_widget.currentWidget() == self.search_results_widget:
             if event.key() == Qt.Key_Right:
-                self._ir_a_pagina_siguiente_resultados()
+                # self._ir_a_pagina_siguiente_resultados() # Redirigir a PaginatedResultsWidget
+                self.search_results_widget._ir_a_pagina_siguiente_resultados() # ASUMIENDO QUE EL MÉTODO ES PÚBLICO O ACCESIBLE
             elif event.key() == Qt.Key_Left:
-                self._ir_a_pagina_anterior_resultados()
+                # self._ir_a_pagina_anterior_resultados() # Redirigir a PaginatedResultsWidget
+                self.search_results_widget._ir_a_pagina_anterior_resultados() # ASUMIENDO QUE EL MÉTODO ES PÚBLICO O ACCESIBLE
         super().keyPressEvent(event)
 
     def eventFilter(self, obj, event):
@@ -1132,4 +353,15 @@ class VentanaGestionLibreria(QMainWindow):
             if self.inactivity_timer.isActive(): # Solo reiniciar si está activo
                 self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS) # Reinicia con el intervalo completo
 
-        return super().eventFilter(obj, event) 
+        return super().eventFilter(obj, event)
+
+    def _handle_menu_action(self, accion: str):
+        """Maneja las acciones disparadas desde los botones del menú principal (MainMenuCard)."""
+        accion_pendiente(accion, self)
+
+    # ELIMINAR MÉTODOS DE PAGINACIÓN VACÍOS
+    # def _ir_a_pagina_siguiente_resultados(self):
+    #     pass
+
+    # def _ir_a_pagina_anterior_resultados(self):
+    #     pass 
