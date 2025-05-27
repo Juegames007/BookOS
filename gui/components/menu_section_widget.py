@@ -117,7 +117,7 @@ class MenuSectionWidget(QWidget):
         opciones_ajustes_main = [
             {"icon": "ajustes_finanzas.png", "text": "  Modificar Finanzas", "action": "Modificar Finanzas"},
             {"icon": "eliminar.png", "text": "  Eliminar Libro", "action": "Eliminar Libro"},
-            {"icon": "salir.png", "text": "  Salir", "action": "SALIR_APP"}
+            {"icon": "salir.png", "text": "  Salir de la App", "action": "SALIR_APP"}
         ]
         ajustes_card_principal = MainMenuCard(opciones_ajustes_main, card_width, main_card_height, "Ajustes")
         ajustes_card_principal.action_triggered.connect(self.action_triggered.emit)
