@@ -176,9 +176,9 @@ STYLES = {
 
     "main_menu_card_style": f"""
         QFrame#mainMenuCard {{
-            background-color: rgba(255, 255, 255, 30); /* Totalmente transparente */
-            border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 100); /* rgba(255, 255, 255, 0.18) */
+        background-color: rgba(255, 255, 255, 89); /* Ajustado para opacidad 0.35 */
+        border-radius: 16px; /* Ajustado */
+        border: 0.5px solid white; /* Ajustado */
         }}
         QFrame#mainMenuCard QLabel {{
             background-color: transparent;

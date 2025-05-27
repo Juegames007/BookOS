@@ -20,7 +20,7 @@ class MainMenuCard(QFrame):
         self.font_family = FONTS.get("family", "Arial")
         self.setObjectName("mainMenuCard") # Importante para que el estilo aplique específicamente
         self._setup_ui(titulo_str, opciones_data, card_width, card_height)
-        self._apply_shadow_effect()
+        #self._apply_shadow_effect()
 
     def _setup_ui(self, titulo_str: Optional[str], opciones_data: List[Dict[str, str]], ancho: int, alto: int):
         self.setFixedSize(ancho, alto)
@@ -75,7 +75,7 @@ class MainMenuCard(QFrame):
 
     def _apply_shadow_effect(self):
         shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(100) # Actualizado el BlurRadius a 10
+        shadow.setBlurRadius(10) # Actualizado el BlurRadius a 10
         # El color de la sombra: rgba( 31, 38, 135, 0.37 )
         # Qt espera un valor alfa de 0-255, así que 0.37 * 255 ~= 94
         shadow.setColor(QColor(31, 38, 135, 94))
