@@ -35,13 +35,13 @@ class MainMenuCard(QFrame):
 
         layout_tarjeta.setContentsMargins(30, top_margin, 30, 30)
         layout_tarjeta.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout_tarjeta.setSpacing(10)
+        layout_tarjeta.setSpacing(8)
 
         if titulo_str:
             titulo_seccion = QLabel(titulo_str)
             font_titulo_seccion = QFont(self.font_family, FONTS.get("size_large", 16), QFont.Weight.Bold)
             titulo_seccion.setFont(font_titulo_seccion)
-            titulo_seccion.setAlignment(Qt.AlignmentFlag.AlignLeft)
+            titulo_seccion.setAlignment(Qt.AlignmentFlag.AlignCenter)
             titulo_seccion.setStyleSheet("QLabel { color: black; background-color: transparent; padding-bottom: 10px; border: none; }")
             layout_tarjeta.addWidget(titulo_seccion)
 
@@ -66,9 +66,15 @@ class MainMenuCard(QFrame):
                  ruta_icono_completa = None # No pasar ruta si no existe
 
             boton_personalizado = CustomButton(icon_path=ruta_icono_completa, text=texto_visible_original.strip())
-            
-            # Usar una función lambda que capture el valor actual de accion_definida
             boton_personalizado.clicked.connect(lambda checked=False, accion=accion_definida: self.action_triggered.emit(accion))
+
+            # --- INICIO DE MODIFICACIÓN PARA RECORTAR LATERALMENTE ---
+            # Envolver el botón en un QHBoxLayout para controlar su expansión horizontal
+            button_container_layout = QHBoxLayout()
+            button_container_layout.addStretch(1) # Espacio flexible a la izquierda
+            button_container_layout.addWidget(boton_personalizado)
+            button_container_layout.addStretch(1) # Espacio flexible a la derecha
+            # Usar una función lambda que capture el valor actual de accion_definida
             layout_tarjeta.addWidget(boton_personalizado)
 
         layout_tarjeta.addStretch(1)

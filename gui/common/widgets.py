@@ -1,47 +1,20 @@
-"""
-Módulo de widgets reutilizables para la interfaz gráfica.
-
-Este módulo contiene definiciones de widgets personalizados que se usan en 
-múltiples partes de la aplicación. Cada widget está diseñado para mantener 
-una apariencia y comportamiento consistentes en toda la aplicación.
-
-Clases:
-- CustomButton: Botón personalizado con estilos y efectos visuales.
-"""
+# Dentro de widgets.py
 
 import os
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy
 from PySide6.QtGui import QPixmap, QFont, QCursor
 from PySide6.QtCore import Signal, Qt, QSize
 
 class CustomButton(QFrame):
-    """
-    Botón personalizado con estilo coherente para toda la aplicación.
-    
-    Esta clase implementa un botón con apariencia personalizada, que incluye:
-    - Fondo semitransparente
-    - Icono opcional
-    - Texto
-    - Flecha ">" a la derecha
-    - Efectos visuales al pasar el mouse o hacer clic
-    
-    Señales:
-    - clicked: Se emite cuando se hace clic en el botón
-    """
     clicked = Signal()
 
     def __init__(self, icon_path=None, text="", parent=None):
-        """
-        Inicializa un nuevo botón personalizado.
-        
-        Args:
-            icon_path (str, opcional): Ruta al archivo de icono.
-            text (str, opcional): Texto a mostrar en el botón.
-            parent (QWidget, opcional): Widget padre.
-        """
         super().__init__(parent)
         self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        self.setFixedHeight(50)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed) # Para la altura ya tienes setFixedHeight
+        # Mantendré la altura en 50px como estaba en tu archivo,
+        # pero si quieres reducirla, este es el lugar (ej. self.setFixedHeight(40))
+        self.setFixedHeight(50) 
         self.font_family = "San Francisco"
         self.text_color = "#202427"
         self.icon_size = QSize(24, 24)
@@ -78,8 +51,15 @@ class CustomButton(QFrame):
         self.setStyleSheet(self.style_normal)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 0, 10, 0)
-        layout.setSpacing(8)
+        # Márgenes del QHBoxLayout DENTRO del CustomButton.
+        # Si los botones se sienten muy "apretados" o muy "sueltos" lateralmente 
+        # DESPUÉS de aplicar el recorte en MainMenuCard, puedes ajustar estos márgenes.
+        # Por ejemplo, para botones más estrechos: layout.setContentsMargins(5, 0, 5, 0)
+        layout.setContentsMargins(10, 0, 10, 0) # Mantengo los 10px por ahora
+        layout.setSpacing(8) # Espacio entre icono y texto (si ambos existen)
+
+        # --- INICIO DE SECCIÓN CORREGIDA Y PARA CENTRAR ---
+        layout.addStretch(1) # 1. Stretch a la izquierda para empujar el contenido al centro
 
         self.icon_label = QLabel()
         if icon_path and os.path.exists(icon_path):
@@ -88,49 +68,53 @@ class CustomButton(QFrame):
         else:
             if icon_path:
                  print(f"Advertencia: No se pudo cargar el icono para CustomButton: {icon_path}")
-            self.icon_label.setFixedSize(0,0)
-            layout.setSpacing(0)
+            # Si no hay icono, no ocupa espacio visual, pero el widget QLabel existe.
+            # Aseguramos que no tenga un tamaño mínimo que interfiera.
+            self.icon_label.setFixedSize(0,0) 
+            # Si no hay icono, y SÍ hay texto, puede que no quieras el espaciado del layout
+            # layout.setSpacing(0) # Descomenta si el texto queda muy separado sin icono
 
         self.text_label = QLabel(text)
-        font_botones = QFont(self.font_family, 11)
+        # El tamaño de fuente que habías establecido (12)
+        font_botones = QFont(self.font_family, 12) 
         self.text_label.setFont(font_botones)
 
-        layout.addWidget(self.icon_label)
-        layout.addWidget(self.text_label)
-        layout.addStretch(1)
+        layout.addWidget(self.icon_label) # 2. Añadir etiqueta del icono
+        layout.addWidget(self.text_label) # 3. Añadir etiqueta del texto
 
-        if not icon_path: # Solo añadir la flecha si NO hay icono
-            self.arrow_label = QLabel("")
+        # Lógica para el arrow_label (si es necesario)
+        # Si no hay icono, se muestra la flecha (actualmente vacía).
+        # Si quieres que la flecha desaparezca completamente y no afecte el centrado,
+        # podrías poner toda esta sección del arrow_label dentro de un 'if False:' o eliminarla.
+        if not icon_path:
+            self.arrow_label = QLabel("") # Flecha vacía, no será visible
             self.arrow_label.setFont(font_botones)
-            # Asegurar que self.arrow_label esté definido antes de usar fontMetrics en él
-            # y solo calcular el ancho si se va a mostrar.
-            self.arrow_label.setFixedWidth(self.arrow_label.fontMetrics().horizontalAdvance("> ") + 5)
-            layout.addWidget(self.arrow_label)
+            self.arrow_label.setFixedWidth(0) # No ocupa espacio si está vacía
+            layout.addWidget(self.arrow_label) # 4. Añadir (potencialmente) la flecha
         else:
-            self.arrow_label = None # Asegurarse de que no exista o esté vacío
+            self.arrow_label = None
+
+        layout.addStretch(1) # 5. Stretch a la derecha para completar el centrado
+        # --- FIN DE SECCIÓN CORREGIDA Y PARA CENTRAR ---
 
     def enterEvent(self, event):
-        """Se activa cuando el cursor entra en el botón."""
         self.setStyleSheet(self.style_hover)
         super().enterEvent(event)
         
     def leaveEvent(self, event):
-        """Se activa cuando el cursor sale del botón."""
         self.setStyleSheet(self.style_normal)
         super().leaveEvent(event)
         
     def mousePressEvent(self, event):
-        """Se activa cuando se presiona el botón del mouse."""
         if event.button() == Qt.MouseButton.LeftButton:
             self.setStyleSheet(self.style_pressed)
         super().mousePressEvent(event)
         
     def mouseReleaseEvent(self, event):
-        """Se activa cuando se suelta el botón del mouse."""
         if event.button() == Qt.MouseButton.LeftButton:
             if self.rect().contains(event.position().toPoint()):
                 self.setStyleSheet(self.style_hover)
                 self.clicked.emit()
             else:
                 self.setStyleSheet(self.style_normal)
-        super().mouseReleaseEvent(event) 
+        super().mouseReleaseEvent(event)
