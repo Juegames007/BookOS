@@ -1,5 +1,5 @@
 import os
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QGraphicsDropShadowEffect
+from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QGraphicsDropShadowEffect, QWidget, QHBoxLayout
 from PySide6.QtGui import QFont, QColor
 from PySide6.QtCore import Qt, Signal
 from typing import List, Dict, Optional
