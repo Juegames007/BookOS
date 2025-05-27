@@ -173,4 +173,20 @@ STYLES = {
             background-color: {COLORS["accent_red_pressed"]};
         }}
     """,
+
+    "main_menu_card_style": f"""
+        QFrame#mainMenuCard {{
+            background-color: rgba(255, 255, 255, 30); /* Totalmente transparente */
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 100); /* rgba(255, 255, 255, 0.18) */
+        }}
+        QFrame#mainMenuCard QLabel {{
+            background-color: transparent;
+            border: none;
+        }}
+        /* Si CustomButton necesita ser transparente:
+        QFrame#mainMenuCard CustomButton {{
+            background-color: transparent;
+        }}*/
+    """,
 } 

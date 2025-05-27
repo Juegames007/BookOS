@@ -7,7 +7,7 @@ que muestra el menú con las diferentes opciones disponibles para el usuario.
 
 import os
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QSizePolicy, QSpacerItem, QMessageBox, QFrame, QApplication,
     QLineEdit # QStackedWidget, QListWidget, QAbstractScrollArea, QScrollArea, QCheckBox, QGraphicsOpacityEffect ya no son necesarios aquí
 )

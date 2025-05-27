@@ -1,11 +1,11 @@
 import os
-from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel
-from PySide6.QtGui import QFont
+from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QGraphicsDropShadowEffect
+from PySide6.QtGui import QFont, QColor
 from PySide6.QtCore import Qt, Signal
 from typing import List, Dict, Optional
 
-from gui.common.widgets import CustomButton # Asumiendo que CustomButton está aquí
-from gui.common.styles import FONTS          # Asumiendo que FONTS está aquí
+from gui.common.widgets import CustomButton
+from gui.common.styles import FONTS, STYLES
 
 class MainMenuCard(QFrame):
     action_triggered = Signal(str)  # Emite el 'action' string del botón presionado
@@ -18,17 +18,13 @@ class MainMenuCard(QFrame):
                  parent=None):
         super().__init__(parent)
         self.font_family = FONTS.get("family", "Arial")
+        self.setObjectName("mainMenuCard") # Importante para que el estilo aplique específicamente
         self._setup_ui(titulo_str, opciones_data, card_width, card_height)
+        self._apply_shadow_effect()
 
     def _setup_ui(self, titulo_str: Optional[str], opciones_data: List[Dict[str, str]], ancho: int, alto: int):
         self.setFixedSize(ancho, alto)
-        self.setStyleSheet(f"""
-            QFrame {{
-                background-color: rgba(255, 255, 255, 80); 
-                border-radius: 25px;
-                border: 1px solid rgba(220, 220, 220, 70);
-            }}
-        """)
+        self.setStyleSheet(STYLES.get("main_menu_card_style", ""))
         layout_tarjeta = QVBoxLayout(self)
 
         top_margin = 15
@@ -77,6 +73,15 @@ class MainMenuCard(QFrame):
 
         layout_tarjeta.addStretch(1)
 
+    def _apply_shadow_effect(self):
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(100) # Actualizado el BlurRadius a 10
+        # El color de la sombra: rgba( 31, 38, 135, 0.37 )
+        # Qt espera un valor alfa de 0-255, así que 0.37 * 255 ~= 94
+        shadow.setColor(QColor(31, 38, 135, 94))
+        # Desplazamiento: 0 8px
+        shadow.setOffset(0, 8) # (dx, dy)
+        self.setGraphicsEffect(shadow)
 
 if __name__ == '__main__':
     from PySide6.QtWidgets import QApplication, QMainWindow
