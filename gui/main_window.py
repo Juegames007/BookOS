@@ -121,7 +121,7 @@ class VentanaGestionLibreria(QMainWindow):
         self.setCentralWidget(self.main_menu_widget) # Ya no se usa QStackedWidget
 
         self.root_layout_main_menu = QVBoxLayout(self.main_menu_widget)
-        self.root_layout_main_menu.setContentsMargins(20, 125, 20, 20)
+        self.root_layout_main_menu.setContentsMargins(20, 70, 20, 20)
         self.root_layout_main_menu.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
         self.title_label = QLabel("BookOS")

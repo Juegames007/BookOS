@@ -5,14 +5,12 @@ from PySide6.QtCore import Qt, Signal
 from typing import List, Dict, Optional
 
 from .main_menu_card import MainMenuCard
-from .search_bar_widget import SearchBarWidget # Para la barra de búsqueda en la sección de finanzas
+from .search_bar_widget import SearchBarWidget
 from gui.common.styles import FONTS
 
 class MenuSectionWidget(QWidget):
-    action_triggered = Signal(str)  # Se re-emite desde las MainMenuCard
-    # Señal para la búsqueda, emitida por la SearchBarWidget interna
-    # Esta señal será conectada por la VentanaGestionLibreria al PaginatedResultsWidget
-    search_requested = Signal(str, dict) 
+    action_triggered = Signal(str)
+    search_requested = Signal(str, dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -20,22 +18,11 @@ class MenuSectionWidget(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        # Este widget en sí mismo será transparente, el fondo lo maneja la ventana principal
         self.setStyleSheet("QWidget { background: transparent; }")
         
         layout_overall_content = QVBoxLayout(self)
         layout_overall_content.setContentsMargins(0, 0, 0, 0)
         layout_overall_content.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
-        # layout_overall_content.addSpacerItem(QSpacerItem(20, 15, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed))
-
-        # Título General (opcional, podría estar en main_window)
-        # title_label = QLabel("Gestión Librería")
-        # title_font = QFont(self.font_family, FONTS.get("size_xlarge", 24), QFont.Weight.Bold)
-        # title_label.setFont(title_font)
-        # title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # title_label.setStyleSheet("QLabel { color: black; background-color: transparent; padding-bottom: 10px; }")
-        # layout_overall_content.addWidget(title_label)
-        # layout_overall_content.addSpacerItem(QSpacerItem(20, 60, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed))
 
         cards_holder_widget = QWidget()
         cards_holder_widget.setStyleSheet("QWidget { background: transparent; }")
@@ -46,9 +33,13 @@ class MenuSectionWidget(QWidget):
 
         layout_cards_holder.addStretch(1)
 
-        card_width = 300
+        card_width = 275  # Manteniendo el ancho de tarjeta que establecimos
         main_card_height = 280
-        extra_card_height = 160
+        extra_card_height = 160 
+        # Nueva altura para la tarjeta de estadísticas, puede ser similar a extra_card_height
+        # o ajustarse según el número de botones. Con 2 botones, podría ser más pequeña.
+        stats_card_height = 140 # Estimación para 2 botones, ajustar si es necesario
+
         card_spacing = 15
 
         # --- Columna para Inventario ---
@@ -67,8 +58,10 @@ class MenuSectionWidget(QWidget):
         inventario_card_principal.action_triggered.connect(self.action_triggered.emit)
         layout_inventario_columna.addWidget(inventario_card_principal)
         
-        inventario_card_relleno = MainMenuCard([], card_width, extra_card_height) # Tarjeta vacía para relleno
-        inventario_card_relleno.setVisible(False) # Debe ser invisible
+        # Tarjeta de relleno para inventario para alinear alturas si otras columnas crecen
+        inventario_card_relleno = MainMenuCard([], card_width, 
+                                               extra_card_height + card_spacing + stats_card_height) # Ajustar altura de relleno
+        inventario_card_relleno.setVisible(False) 
         layout_inventario_columna.addWidget(inventario_card_relleno)
         layout_inventario_columna.addStretch(1)
         layout_cards_holder.addWidget(inventario_columna_widget)
@@ -80,30 +73,42 @@ class MenuSectionWidget(QWidget):
         layout_finanzas_columna.setContentsMargins(0,0,0,0)
         layout_finanzas_columna.setSpacing(card_spacing)
 
-        self.search_bar = SearchBarWidget() # Instanciar la barra de búsqueda
+        self.search_bar = SearchBarWidget()
         self.search_bar.setFixedWidth(card_width)
-        self.search_bar.search_requested.connect(self.search_requested.emit) # Re-emitir la señal
+        self.search_bar.search_requested.connect(self.search_requested.emit)
         layout_finanzas_columna.addWidget(self.search_bar)
 
         opciones_finanzas_main = [
             {"icon": "vender.png", "text": "  Vender Libro", "action": "Vender Libro"},
-            {"icon": "ingreso.png", "text": "  Reportar Ingreso", "action": "Reportar Ingreso"},
-            {"icon": "gasto.png", "text": "  Reportar Gasto", "action": "Reportar Gasto"},
+            {"icon": "ingreso.png", "text": "  Anotar Ingreso", "action": "Reportar Ingreso"},
+            {"icon": "gasto.png", "text": "  Anotar Gasto", "action": "Reportar Gasto"},
         ]
-        finanzas_card_principal = MainMenuCard(opciones_finanzas_main, card_width, main_card_height, "Finanzas") # Ajustar altura si es necesario
+        # Ajustar altura de la tarjeta principal de finanzas si es necesario
+        # Por ahora, la dejamos igual. Si se ve muy apretada, se puede reducir su contenido o altura.
+        finanzas_card_principal = MainMenuCard(opciones_finanzas_main, card_width, main_card_height, "Finanzas")
         finanzas_card_principal.action_triggered.connect(self.action_triggered.emit)
         layout_finanzas_columna.addWidget(finanzas_card_principal)
 
+        # Tarjeta extra original de finanzas
         opciones_finanzas_extra = [
-            {"icon": "contabilidad.png", "text": "  Generar Contabilidad", "action": "Generar Contabilidad"},
-            {"icon": "pedidos.png", "text": "  Generar Pedidos", "action": "Generar Pedidos"}
+            {"icon": "contabilidad.png", "text": "  Ver Finanzas", "action": "Ver Finanzas"}, # Asume que tienes un icono ver_finanzas.png
+            {"icon": "pedidos.png", "text": "  Ver Pedidos", "action": "Ver Pedidos"}
         ]
-        # La altura de esta tarjeta extra podría necesitar ser ajustada para que coincida con la search_bar + card_spacing
-        # o podemos asumir que las tarjetas de relleno ya no son necesarias si la search bar ocupa espacio.
-        # Por ahora, mantenemos una tarjeta extra para estructura similar.
-        finanzas_card_extra = MainMenuCard(opciones_finanzas_extra, card_width, extra_card_height - self.search_bar.sizeHint().height() - card_spacing if extra_card_height > self.search_bar.sizeHint().height() + card_spacing else 50)
+        # Ajustar la altura de finanzas_card_extra si es necesario
+        # La altura disponible para finanzas_card_extra ahora debe considerar la nueva tarjeta de estadísticas.
+        # Por ahora, la dejamos con su cálculo original, podría necesitar ajuste manual o hacerse más pequeña.
+        # altura_disponible_finanzas_extra = extra_card_height 
+        # (Esta línea no estaba, pero es para pensar la lógica)
+        
+        # Si finanzas_card_extra y stats_card van en el mismo espacio vertical que extra_card_height
+        # de las otras columnas, hay que dividir esa altura.
+        # O, si la columna de finanzas puede ser más alta, entonces no hay problema.
+        # Asumamos que la columna de finanzas puede crecer.
+        
+        finanzas_card_extra = MainMenuCard(opciones_finanzas_extra, card_width, extra_card_height) # Sin título explícito, usará el espacio
         finanzas_card_extra.action_triggered.connect(self.action_triggered.emit)
-        # layout_finanzas_columna.addWidget(finanzas_card_extra) # Decidir si esta tarjeta extra es necesaria
+        layout_finanzas_columna.addWidget(finanzas_card_extra)
+
         layout_finanzas_columna.addStretch(1)
         layout_cards_holder.addWidget(finanzas_columna_widget)
 
@@ -115,15 +120,18 @@ class MenuSectionWidget(QWidget):
         layout_ajustes_columna.setSpacing(card_spacing)
 
         opciones_ajustes_main = [
-            {"icon": "ajustes_finanzas.png", "text": "  Modificar Finanzas", "action": "Modificar Finanzas"},
+            {"icon": "ajustes_finanzas.png", "text": "  Mod. Finanzas", "action": "Modificar Finanzas"},
             {"icon": "eliminar.png", "text": "  Eliminar Libro", "action": "Eliminar Libro"},
-            {"icon": "salir.png", "text": "  Salir de la App", "action": "SALIR_APP"}
+            {"icon": "salir.png", "text": "  Salir", "action": "SALIR_APP"}
         ]
         ajustes_card_principal = MainMenuCard(opciones_ajustes_main, card_width, main_card_height, "Ajustes")
         ajustes_card_principal.action_triggered.connect(self.action_triggered.emit)
         layout_ajustes_columna.addWidget(ajustes_card_principal)
         
-        ajustes_card_relleno = MainMenuCard([], card_width, extra_card_height)
+        # Tarjeta de relleno para ajustes para alinear alturas
+        # Debe ser igual a la altura de relleno de inventario para mantener la simetría
+        ajustes_card_relleno = MainMenuCard([], card_width, 
+                                            extra_card_height + card_spacing + stats_card_height) # Ajustar altura de relleno
         ajustes_card_relleno.setVisible(False)
         layout_ajustes_columna.addWidget(ajustes_card_relleno)
         layout_ajustes_columna.addStretch(1)
