@@ -264,6 +264,7 @@ class BookService:
         # Convertir los resultados al formato deseado
         books = []
         for row in results:
+            posicion_db = row.get("posicion")  # Obtener el valor de la columna 'posicion'
             book = {
                 "ISBN": row["isbn"],
                 "Título": row["titulo"],
@@ -272,7 +273,7 @@ class BookService:
                 "Imagen": row.get("imagen_url", ""),
                 "Categorías": row["categorias"].split(",") if row["categorias"] else [],
                 "Precio": row.get("precio_venta", 0),
-                "Posición": row.get("posicion", ""),
+                "Posición": posicion_db if posicion_db else "-", # Si es None o vacío, usar "-", sino el valor de la DB
                 "Cantidad": row.get("cantidad", 0)
             }
             books.append(book)

@@ -10,9 +10,9 @@ import os
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QFrame, QWidget, QMessageBox, QSizePolicy,
-    QSpacerItem # Añadido QSpacerItem
+    QSpacerItem, QGraphicsBlurEffect # Añadido QGraphicsBlurEffect
 )
-from PySide6.QtGui import QFont, QPixmap, QPainter, QColor, QBrush
+from PySide6.QtGui import QFont, QPixmap, QPainter, QColor, QBrush, QMouseEvent # Añadido QMouseEvent
 from PySide6.QtCore import Qt, QPoint, Signal, QPropertyAnimation, QEasingCurve, Property, QTimer
 from typing import Dict, Any, List # Añadido List
 
@@ -121,7 +121,13 @@ class AddBookDialog(QDialog): #
     def __init__(self, book_service: BookService, parent=None): #
         super().__init__(parent)
         self.setWindowTitle(" ") 
-        self.setMinimumSize(480, 280) 
+        # Flags para ventana sin bordes y fondo translúcido
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+        # Para la funcionalidad de arrastre
+        self._drag_pos = QPoint()
+        self.title_bar_height = 50 # Altura aproximada de la barra de título para el arrastre
 
         self.font_family = FONTS["family"] #
         self.book_service = book_service #
@@ -147,7 +153,78 @@ class AddBookDialog(QDialog): #
             print(f"ADVERTENCIA MUY IMPORTANTE: No se pudo cargar la imagen de fondo desde: {self.background_image_path}")
             self.setStyleSheet(f"QDialog {{ background-color: {COLORS.get('background_medium', '#E0E0E0')}; }}") #
         
+        self._blur_effect = None
+        if self.parent():
+            self._blur_effect = QGraphicsBlurEffect()
+            self._blur_effect.setBlurRadius(15) # Ajusta el radio de desenfoque según sea necesario
+            self._blur_effect.setEnabled(False) # Inicialmente deshabilitado
+            # Asumimos que el padre (MainWindow) tiene un widget central al que aplicar el blur
+            # Si la estructura es diferente, esto necesitará ajustarse
+            if hasattr(self.parent(), 'centralWidget') and self.parent().centralWidget():
+                 self.parent().centralWidget().setGraphicsEffect(self._blur_effect)
+            elif hasattr(self.parent(), 'current_stacked_widget') and self.parent().current_stacked_widget: # Compatibilidad con tu posible MainApp
+                 self.parent().current_stacked_widget.setGraphicsEffect(self._blur_effect)
+            else: # Fallback: aplicar al padre directamente si no se encuentra un widget central específico
+                # Esto podría no ser ideal si el padre tiene otros diálogos o elementos.
+                # self.parent().setGraphicsEffect(self._blur_effect)
+                print("Advertencia: No se pudo encontrar un widget central en el padre para aplicar el desenfoque.")
+        
         self._setup_ui()
+
+    def _enable_blur(self, enable: bool):
+        if self.parent() and self._blur_effect:
+            self._blur_effect.setEnabled(enable)
+            # Forzar actualización del widget afectado por el efecto
+            if hasattr(self.parent(), 'centralWidget') and self.parent().centralWidget():
+                self.parent().centralWidget().update()
+            elif hasattr(self.parent(), 'current_stacked_widget') and self.parent().current_stacked_widget:
+                self.parent().current_stacked_widget.update()
+            # else:
+            #     self.parent().update()
+
+    def exec(self): # Sobrescribir exec para manejar el desenfoque
+        if self.parent():
+            self._enable_blur(True)
+        result = super().exec()
+        if self.parent():
+            self._enable_blur(False)
+        return result
+
+    def open(self): # Sobrescribir open si se usa show() + event loop local
+        if self.parent():
+            self._enable_blur(True)
+        super().open()
+        # Nota: si se usa show() y no se bloquea, el desenfoque se quitaría al instante.
+        # Se necesita manejar la eliminación del desenfoque cuando el diálogo se cierre de verdad.
+
+    def accept(self): # Sobrescribir para quitar el desenfoque
+        if self.parent():
+            self._enable_blur(False)
+        super().accept()
+
+    def reject(self): # Sobrescribir para quitar el desenfoque
+        if self.parent():
+            self._enable_blur(False)
+        super().reject()
+    
+    def closeEvent(self, event): # Asegurar que el desenfoque se quite al cerrar
+        if self.parent():
+            self._enable_blur(False)
+        super().closeEvent(event)
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton and event.pos().y() < self.title_bar_height:
+            self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if event.buttons() == Qt.MouseButton.LeftButton and not self._drag_pos.isNull():
+            self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        self._drag_pos = QPoint()
+        event.accept()
 
     def _setup_ui(self): #
         main_dialog_layout = QVBoxLayout(self)
@@ -299,7 +376,7 @@ class AddBookDialog(QDialog): #
         row3_layout.addWidget(price_widget)
         row3_layout.addWidget(position_widget)
         details_layout.addLayout(row3_layout)
-        
+
         self.frame_layout.addWidget(self.detail_widgets_container)
         self.detail_widgets_container.setVisible(False)
 
@@ -367,17 +444,18 @@ class AddBookDialog(QDialog): #
             self.guardar_button.setCursor(Qt.CursorShape.ArrowCursor)
             
     def paintEvent(self, event): #
-        painter = QPainter(self)
-        if not self.background_pixmap.isNull():
-            scaled_pixmap = self.background_pixmap.scaled(
-                self.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
-            point = QPoint(0, 0)
-            if scaled_pixmap.width() > self.width(): point.setX(int((scaled_pixmap.width() - self.width()) / -2))
-            if scaled_pixmap.height() > self.height(): point.setY(int((scaled_pixmap.height() - self.height()) / -2))
-            painter.drawPixmap(point, scaled_pixmap)
-        else: 
-            painter.fillRect(self.rect(), QColor(COLORS.get('background_medium', '#D1D1D1'))) #
-        super().paintEvent(event)
+        # Comentado para permitir fondo transparente y ver el efecto glassmorphism del frame interno
+        # painter = QPainter(self)
+        # if not self.background_pixmap.isNull():
+        #     scaled_pixmap = self.background_pixmap.scaled(
+        #         self.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+        #     point = QPoint(0, 0)
+        #     if scaled_pixmap.width() > self.width(): point.setX(int((scaled_pixmap.width() - self.width()) / -2))
+        #     if scaled_pixmap.height() > self.height(): point.setY(int((scaled_pixmap.height() - self.height()) / -2))
+        #     painter.drawPixmap(point, scaled_pixmap)
+        # else: 
+        #     painter.fillRect(self.rect(), QColor(COLORS.get('background_medium', '#D1D1D1'))) #
+        super().paintEvent(event) # Importante llamar al evento padre si se necesita para QDialog
 
     def _fill_form_fields(self, book_details: Dict[str, Any], make_editable: bool): #
         self.titulo_input.setText(book_details.get("Título", ""))

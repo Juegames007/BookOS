@@ -185,10 +185,23 @@ class VentanaGestionLibreria(QMainWindow):
         if hasattr(self, 'current_search_results_window') and self.current_search_results_window and self.current_search_results_window.isVisible():
             print("Cerrando ventana de resultados por inactividad.")
             self.current_search_results_window.close()
-        # Podríamos añadir aquí lógica para volver a un estado "seguro" de la app si fuera necesario.
         # Por ahora, solo reinicia el timer si la ventana principal está activa.
         if self.isActiveWindow():
              self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS)
+
+    def _handle_search_results_closed(self):
+        """Se llama cuando la ventana de resultados de búsqueda se cierra."""
+        print("Ventana de resultados cerrada, reiniciando temporizador de inactividad de la ventana principal.")
+        if not self.inactivity_timer.isActive(): # Solo reiniciar si no estaba ya activo por alguna razón
+            self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS)
+        
+        # Desconectar la señal para evitar múltiples conexiones si la ventana se reutiliza o se crea otra
+        if self.current_search_results_window:
+            try:
+                self.current_search_results_window.finished.disconnect(self._handle_search_results_closed)
+            except RuntimeError: # La señal podría ya no estar conectada o el objeto destruido
+                pass
+        # self.current_search_results_window = None # Opcional: limpiar la referencia
 
     def _iniciar_busqueda_desde_componente(self, termino_busqueda: str, filtros: dict):
         """Se llama cuando SearchBarWidget emite la señal search_requested."""
@@ -209,11 +222,20 @@ class VentanaGestionLibreria(QMainWindow):
                 self.current_search_results_window = None
 
             self.current_search_results_window = SearchResultsWindow(libros_encontrados, termino_busqueda, self)
+            
+            # Detener el temporizador de inactividad de la ventana principal
+            if self.inactivity_timer.isActive():
+                print("Deteniendo temporizador de inactividad de la ventana principal.")
+                self.inactivity_timer.stop()
+            
+            # Conectar la señal 'finished' para saber cuándo se cierra la ventana de resultados
+            self.current_search_results_window.finished.connect(self._handle_search_results_closed)
+            
             self.current_search_results_window.show()
             
-            # Reiniciar el temporizador de inactividad al mostrar la vista de búsqueda
-            if self.inactivity_timer.isActive():
-                self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS)
+            # El reinicio del temporizador se maneja ahora cuando se cierra la ventana de resultados.
+            # if self.inactivity_timer.isActive():
+            #     self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS)
         else:
             print("Término de búsqueda vacío (desde componente SearchBarWidget).")
             # Opcional: Cerrar la ventana de resultados si estaba abierta y se borra el término

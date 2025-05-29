@@ -2,8 +2,8 @@ import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QStackedWidget, QSizePolicy
 )
-from PySide6.QtGui import QFont
-from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve, QRect
+from PySide6.QtGui import QFont, QDesktopServices
+from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve, QRect, QUrl
 from typing import List, Dict, Any
 
 from gui.common.styles import FONTS
@@ -14,9 +14,9 @@ class PaginatedResultsWidget(QWidget):
     back_to_menu_requested = Signal()
 
     # Constantes de la ventana principal que eran relevantes aquí
-    RESULT_TABLE_WIDTH = 600      
-    MAX_BOOK_ROWS_PER_TABLE = 12 
-    TABLES_PER_PAGE = 2          
+    RESULT_TABLE_WIDTH = 750      
+    MAX_BOOK_ROWS_PER_TABLE = 10
+    TABLES_PER_PAGE = 1          
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -31,7 +31,9 @@ class PaginatedResultsWidget(QWidget):
     def _setup_ui(self):
         main_layout = QVBoxLayout(self) 
         main_layout.setContentsMargins(0, 0, 0, 0) # Ajustar márgenes si es necesario, 0 para que ocupe todo el espacio asignado
-        main_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+
+        main_layout.addStretch(1) # Stretch antes del contenido
 
         self.search_term_label = QLabel("Resultados para: ...")
         font_resultados = QFont(self.font_family, FONTS.get("size_large", 18), QFont.Weight.Bold)
@@ -68,8 +70,8 @@ class PaginatedResultsWidget(QWidget):
         siguiente_icon_path = os.path.join(icon_base_path, "siguiente.png")
 
         self.boton_anterior_resultados = CustomButton(icon_path=anterior_icon_path, text="")
+        self.boton_anterior_resultados.setMinimumWidth(50)
         self.boton_anterior_resultados.clicked.connect(self._ir_a_pagina_anterior_resultados)
-        self.boton_anterior_resultados.setEnabled(False)
         navigation_and_back_layout.addWidget(self.boton_anterior_resultados)
 
         navigation_and_back_layout.addStretch(1)
@@ -81,11 +83,14 @@ class PaginatedResultsWidget(QWidget):
         navigation_and_back_layout.addStretch(1)
 
         self.boton_siguiente_resultados = CustomButton(icon_path=siguiente_icon_path, text="")
+        self.boton_siguiente_resultados.setMinimumWidth(50)
         self.boton_siguiente_resultados.clicked.connect(self._ir_a_pagina_siguiente_resultados)
-        self.boton_siguiente_resultados.setEnabled(False)
         navigation_and_back_layout.addWidget(self.boton_siguiente_resultados)
         
+        main_layout.addSpacing(15)
         main_layout.addLayout(navigation_and_back_layout)
+        main_layout.addStretch(1) # Stretch después del contenido
+
         self.setStyleSheet("background: transparent;")
 
     def update_results(self, libros: List[Dict[str, Any]], search_term: str):
@@ -111,8 +116,8 @@ class PaginatedResultsWidget(QWidget):
             self.boton_anterior_resultados.show()
             self.boton_siguiente_resultados.show()
 
-            headers = ["#", "Título", "Autor", "Categoría"]
-            column_weights = [1, 5, 4, 4]
+            headers = ["#", "Título", "Autor", "Categoría", "Posición", "Imagen"]
+            column_weights = [2, 5, 5, 5, 3, 3]
 
             num_libros = len(libros)
             libros_por_pagina_fisica = self.MAX_BOOK_ROWS_PER_TABLE * self.TABLES_PER_PAGE
@@ -131,17 +136,21 @@ class PaginatedResultsWidget(QWidget):
                     
                     table_component = ResultsTableWidget(headers=headers, column_weights=column_weights)
                     table_component.setFixedWidth(self.RESULT_TABLE_WIDTH)
+                    table_component.image_view_requested.connect(self._handle_image_view_request)
                     
                     libros_para_esta_tabla = []
                     for _ in range(self.MAX_BOOK_ROWS_PER_TABLE):
                         if libro_idx_global < num_libros:
                             libro_data = libros[libro_idx_global]
+                            print(f"DEBUG: PaginatedResultsWidget - libro_data ANTES de append: {libro_data}") # DEBUG
                             # Adaptar libro_data al formato List[str] esperado por ResultsTableWidget.set_data
                             libros_para_esta_tabla.append([
                                 str(libro_idx_global + 1),
                                 libro_data.get("Título", "N/A"),
                                 libro_data.get("Autor", "N/A"),
-                                ", ".join(libro_data.get("Categorías", [])) if libro_data.get("Categorías") else "-"
+                                ", ".join(libro_data.get("Categorías", [])) if libro_data.get("Categorías") else "-",
+                                libro_data.get("Posición", "-"),
+                                libro_data.get("Imagen", "")
                             ])
                             libro_idx_global += 1
                         else:
@@ -238,6 +247,11 @@ class PaginatedResultsWidget(QWidget):
         anim_next_page_slide_in.finished.connect(transition_finished)
         anim_current_page_slide_out.start()
         anim_next_page_slide_in.start()
+
+    def _handle_image_view_request(self, image_url: str):
+        if image_url:
+            print(f"Solicitud para ver imagen: {image_url}") # Para depuración
+            QDesktopServices.openUrl(QUrl(image_url))
 
 if __name__ == '__main__':
     from PySide6.QtWidgets import QApplication

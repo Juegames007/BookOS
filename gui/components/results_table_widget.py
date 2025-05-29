@@ -1,14 +1,27 @@
 import os
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QSizePolicy
 )
-from PySide6.QtGui import QFont
-from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont, QPixmap, QDesktopServices
+from PySide6.QtCore import Qt, QSize, Signal, QUrl
 from typing import List, Dict, Any
 
 from gui.common.styles import FONTS # Asumiendo que FONTS está en styles
+from gui.common.widgets import CustomButton # Importar CustomButton
+
+# Rutas a los iconos para la columna de imagen
+try:
+    CURRENT_SCRIPT_DIR_RTW = os.path.dirname(os.path.abspath(__file__))
+    ICON_BASE_PATH_RTW = os.path.join(os.path.dirname(os.path.dirname(CURRENT_SCRIPT_DIR_RTW)), "app", "imagenes")
+except NameError:
+    ICON_BASE_PATH_RTW = os.path.join("app", "imagenes")
+
+VER_ICON_PATH = os.path.join(ICON_BASE_PATH_RTW, "ver.png")
+NO_VER_ICON_PATH = os.path.join(ICON_BASE_PATH_RTW, "no_ver.png")
 
 class ResultsTableWidget(QFrame):
+    image_view_requested = Signal(str) # Definir la señal aquí
+
     def __init__(self, headers: List[str], column_weights: List[int], parent=None):
         super().__init__(parent)
         self.headers = headers
@@ -17,7 +30,7 @@ class ResultsTableWidget(QFrame):
         
         # Constantes de estilo (podrían pasarse o tomarse de un common.styles más específico)
         self.HEADER_ROW_HEIGHT = 30
-        self.BOOK_ROW_HEIGHT = 40
+        self.BOOK_ROW_HEIGHT = 50
         self.CELL_SPACING = 5
         self.ROW_SPACING = 5
         self.TABLE_CELL_PADDING = 5
@@ -93,23 +106,55 @@ class ResultsTableWidget(QFrame):
             book_row_layout.setContentsMargins(0,0,0,0)
             book_row_layout.setSpacing(self.CELL_SPACING)
 
-            for field_text, weight in zip(row_values, self.column_weights):
+            for col_idx, (field_text, weight) in enumerate(zip(row_values, self.column_weights)):
                 cell_frame = QFrame()
-                cell_frame.setStyleSheet(self.cell_style_sheet)
-                cell_layout = QVBoxLayout(cell_frame) # Usar QVBoxLayout
+                cell_layout = QVBoxLayout(cell_frame) 
                 cell_layout.setContentsMargins(0,0,0,0)
-                cell_layout.setAlignment(Qt.AlignmentFlag.AlignCenter) # Centrar QLabel
-                lbl = QLabel(str(field_text)) # Asegurar que sea string
-                lbl.setAlignment(Qt.AlignmentFlag.AlignCenter) # Alinear texto
-                lbl.setFont(QFont(self.font_family, FONTS.get("size_small", 10) -1))
-                lbl.setWordWrap(True)
-                lbl.setStyleSheet("color: #333; background-color:transparent;")
-                cell_layout.addWidget(lbl)
+                cell_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+                header_name = self.headers[col_idx] # Obtener el nombre de la cabecera para esta columna
+
+                if header_name == "Imagen":
+                    cell_frame.setStyleSheet(self.cell_style_sheet) 
+                    image_url = str(field_text) 
+                    icon_to_use = VER_ICON_PATH if image_url and os.path.exists(VER_ICON_PATH) else NO_VER_ICON_PATH
+                    
+                    btn_ver_imagen = CustomButton(icon_path=icon_to_use, text="")
+                    # Hacer el botón más grande para ver si el ícono se muestra completo
+                    button_size = self.BOOK_ROW_HEIGHT - 10 # Antes 16 (para diagnóstico), originalmente self.BOOK_ROW_HEIGHT - 18 o -22
+                    btn_ver_imagen.setFixedSize(button_size, button_size)
+                    btn_ver_imagen.setCursor(Qt.CursorShape.PointingHandCursor if image_url else Qt.CursorShape.ArrowCursor)
+                    # Try a more direct stylesheet to make the button itself transparent and borderless
+                    btn_ver_imagen.setStyleSheet("""
+                        background: transparent;
+                        border: none;
+                        padding: 0px;
+                        margin: 0px;
+                    """)
+
+                    if image_url:
+                        btn_ver_imagen.clicked.connect(lambda checked=False, url=image_url: self.image_view_requested.emit(url))
+                    else:
+                        btn_ver_imagen.setEnabled(False)
+                    
+                    cell_layout.addWidget(btn_ver_imagen, 0, Qt.AlignmentFlag.AlignCenter)
+
+                else: # Para otras columnas, usar QLabel como antes
+                    cell_frame.setStyleSheet(self.cell_style_sheet)
+                    lbl = QLabel(str(field_text))
+                    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                    lbl.setFont(QFont(self.font_family, FONTS.get("size_small", 10) -1))
+                    lbl.setWordWrap(True)
+                    lbl.setMinimumHeight(0) # Permitir que se encoja si es necesario
+                    lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) # Permitir expansión
+                    lbl.setStyleSheet("color: #333; background-color:transparent;")
+                    cell_layout.addWidget(lbl)
+                
                 book_row_layout.addWidget(cell_frame, weight)
             
             self.main_layout.addWidget(book_row_widget)
         
-        self.main_layout.addStretch(1) # Para que las filas no se expandan si hay pocas
+        # self.main_layout.addStretch(1) # Comentado para probar si mejora la alineación
 
 if __name__ == '__main__':
     from PySide6.QtWidgets import QApplication
