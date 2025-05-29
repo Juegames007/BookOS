@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QSpacerItem # Añadido QSpacerItem
 )
 from PySide6.QtGui import QFont, QPixmap, QPainter, QColor, QBrush
-from PySide6.QtCore import Qt, QPoint, Signal, QPropertyAnimation, QEasingCurve, Property
+from PySide6.QtCore import Qt, QPoint, Signal, QPropertyAnimation, QEasingCurve, Property, QTimer
 from typing import Dict, Any, List # Añadido List
 
 from gui.common.styles import BACKGROUND_IMAGE_PATH, COLORS, FONTS, STYLES #
@@ -151,7 +151,7 @@ class AddBookDialog(QDialog): #
 
     def _setup_ui(self): #
         main_dialog_layout = QVBoxLayout(self)
-        main_dialog_layout.setContentsMargins(15, 15, 15, 15)
+        main_dialog_layout.setContentsMargins(10, 10, 10, 10)
         main_dialog_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.unified_form_frame = QFrame()
@@ -206,7 +206,6 @@ class AddBookDialog(QDialog): #
         self.frame_layout = QVBoxLayout(self.unified_form_frame)
         self.frame_layout.setSpacing(10) 
         self.frame_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-
         title_toggle_row_layout = QHBoxLayout()
         
         self.title_label_internal = QLabel("Agregar Libro")
@@ -227,6 +226,9 @@ class AddBookDialog(QDialog): #
         self.cerrar_al_terminar_toggle.setChecked(True)
         title_toggle_row_layout.addWidget(self.cerrar_al_terminar_toggle)
         self.frame_layout.addLayout(title_toggle_row_layout)
+
+        # Añadir un espaciador vertical después de la fila del título del diálogo
+        self.frame_layout.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed))
         
         isbn_label = QLabel("ISBN:")
         isbn_label.setObjectName("fieldLabel")
@@ -238,7 +240,7 @@ class AddBookDialog(QDialog): #
 
         self.detail_widgets_container = QWidget()
         details_layout = QVBoxLayout(self.detail_widgets_container)
-        details_layout.setContentsMargins(0, 10, 0, 0)
+        details_layout.setContentsMargins(0, 10, 0, 0) # Revertido el margen superior a 10
         details_layout.setSpacing(8)
 
         def create_field_widget(label_text: str, placeholder_text: str, return_pressed_lambda=None) -> (QWidget, QLineEdit):
@@ -260,26 +262,28 @@ class AddBookDialog(QDialog): #
             return field_container, line_edit
 
         title_widget, self.titulo_input = create_field_widget("Título:", "Título del libro", lambda: self._focus_next_input(self.autor_input))
-        self.titulo_input.setReadOnly(True)
+        # self.titulo_input.setReadOnly(True) # Inicialmente NO ReadOnly
         
         author_widget, self.autor_input = create_field_widget("Autor:", "Autor(es) del libro", lambda: self._focus_next_input(self.editorial_input))
-        self.autor_input.setReadOnly(True)
+        # self.autor_input.setReadOnly(True) # Inicialmente NO ReadOnly
 
         editorial_widget, self.editorial_input = create_field_widget("Editorial:", "Editorial", lambda: self._focus_next_input(self.categorias_input))
-        self.editorial_input.setReadOnly(True)
+        # self.editorial_input.setReadOnly(True) # Inicialmente NO ReadOnly
 
         categories_widget, self.categorias_input = create_field_widget("Categoría(s):", "Categorías (separadas por coma)", lambda: self._focus_next_input(self.precio_input))
-        self.categorias_input.setReadOnly(True)
+        # self.categorias_input.setReadOnly(True) # Inicialmente NO ReadOnly
 
         price_widget, self.precio_input = create_field_widget("Precio:", "Precio (ej: 15000)", lambda: self._focus_next_input(self.posicion_input))
-        self.precio_input.setReadOnly(True)
+        # self.precio_input.setReadOnly(True) # Inicialmente NO ReadOnly
         self.precio_input.editingFinished.connect(self._formatear_texto_precio)
 
         position_widget, self.posicion_input = create_field_widget("Posición:", "Ubicación física (ej: 01A)", self.guardar_libro_on_enter)
-        self.posicion_input.setReadOnly(True)
+        # self.posicion_input.setReadOnly(True) # Inicialmente NO ReadOnly
         
         image_url_widget, self.imagen_input = create_field_widget("URL Imagen:", "URL de la imagen (opcional)")
-        self.imagen_input.setReadOnly(True)
+        # self.imagen_input.setReadOnly(True) # Inicialmente NO ReadOnly
+        image_url_widget.setParent(self) # Asignar padre para evitar recolección prematura
+        image_url_widget.setVisible(False) # Ocultar explícitamente el widget
 
         row1_layout = QHBoxLayout()
         row1_layout.addWidget(title_widget)
@@ -296,8 +300,6 @@ class AddBookDialog(QDialog): #
         row3_layout.addWidget(position_widget)
         details_layout.addLayout(row3_layout)
         
-        details_layout.addWidget(image_url_widget)
-
         self.frame_layout.addWidget(self.detail_widgets_container)
         self.detail_widgets_container.setVisible(False)
 
@@ -312,11 +314,14 @@ class AddBookDialog(QDialog): #
         self.cancelar_button.setStyleSheet(STYLES.get("button_danger_full", "").replace("border-radius: 5px", "border-radius: 6px")) #
         self.cancelar_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.cancelar_button.clicked.connect(self.reject)
+        self.cancelar_button.setAutoDefault(False) # Prevent becoming auto-default
         
         self.guardar_button = QPushButton("Guardar")
         self.guardar_button.setEnabled(False)
         self.guardar_button.setFixedHeight(38)
         self.guardar_button.setFont(QFont(self.font_family, FONTS.get("size_normal", 11), QFont.Weight.Bold)) #
+        self.guardar_button.setAutoDefault(False) # Prevent becoming auto-default
+        self.guardar_button.clicked.connect(self.guardar_libro) # Connect to guardar_libro
 
         button_layout.addStretch(1) 
         button_layout.addWidget(self.cancelar_button) 
@@ -326,11 +331,9 @@ class AddBookDialog(QDialog): #
         self.frame_layout.addWidget(self.action_buttons_container)
         self.action_buttons_container.setVisible(False)
 
-        self.frame_layout.addSpacerItem(QSpacerItem(20, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
-
-
+        main_dialog_layout.addStretch(1) # Stretch ANTES del frame principal para centrar
         main_dialog_layout.addWidget(self.unified_form_frame)
-        main_dialog_layout.addStretch(1)
+        main_dialog_layout.addStretch(1) # Stretch DESPUÉS del frame principal para centrar
 
         self._actualizar_estilo_guardar_button()
         self.isbn_input.setFocus()
@@ -341,7 +344,7 @@ class AddBookDialog(QDialog): #
             self.detail_widgets_container.setVisible(True)
         if self.action_buttons_container:
             self.action_buttons_container.setVisible(True)
-        self.setMinimumSize(480, 700) 
+        self.setMinimumSize(480, 460) # Altura mínima reducida
         self.adjustSize()
 
     def _actualizar_estilo_guardar_button(self): #
@@ -492,7 +495,6 @@ class AddBookDialog(QDialog): #
             self.isbn_input.setFocus()
             self.ultimo_isbn_para_advertencia = "" 
             self.advertencia_isbn_mostrada_recientemente = True
-            if not self.detail_widgets_container.isVisible(): self._show_details_and_actions()
             return
 
         if not Validator.is_valid_isbn(isbn_actual): #
@@ -500,7 +502,6 @@ class AddBookDialog(QDialog): #
             self.isbn_input.selectAll(); self.isbn_input.setFocus()
             self.ultimo_isbn_para_advertencia = isbn_actual 
             self.advertencia_isbn_mostrada_recientemente = True
-            if not self.detail_widgets_container.isVisible(): self._show_details_and_actions()
             return
             
         self.advertencia_isbn_mostrada_recientemente = False
@@ -518,6 +519,8 @@ class AddBookDialog(QDialog): #
         inventory_entries = search_result["inventory_entries"]
         
         self.ultimo_isbn_procesado_con_enter = isbn_actual
+
+        self._show_details_and_actions()
 
         if status == "encontrado_completo" and inventory_entries:
             first_entry = inventory_entries[0] 
@@ -555,20 +558,62 @@ class AddBookDialog(QDialog): #
             self._fill_form_fields(book_details, make_editable=True)
             self.precio_input.setFocus(); self.precio_input.selectAll()
         elif status == "no_encontrado":
-            QMessageBox.information(self, "Libro no encontrado", "Ingrese los datos manualmente.")
+            msg_box_no_encontrado = QMessageBox(self)
+            msg_box_no_encontrado.setWindowTitle("Libro no encontrado")
+            msg_box_no_encontrado.setText("Ingrese los datos manualmente.")
+            msg_box_no_encontrado.setIcon(QMessageBox.Icon.Information)
+            # Aplicando estilos al QMessageBox
+            msg_box_no_encontrado.setStyleSheet(f"""
+                QMessageBox {{
+                    background-color: {COLORS.get('background_light', 'rgba(255, 255, 255, 0.9)')};
+                    border: 1px solid {COLORS.get('border_light', 'rgba(200, 200, 200, 0.6)')};
+                    border-radius: 10px;
+                }}
+                QLabel {{
+                    color: {COLORS.get('text_primary', '#202427')};
+                    background-color: transparent;
+                    font-size: {FONTS.get('size_normal', 11)}px;
+                    /* min-width: 250px; */ /* Eliminado para evitar exceso de espacio */
+                }}
+                QPushButton {{
+                    background-color: {COLORS.get('accent_blue', '#007AFF')};
+                    color: white;
+                    border-radius: 5px;
+                    padding: 6px 12px; /* Ajuste de padding */
+                    font-size: {FONTS.get('size_normal', 11)}px;
+                    min-height: 28px; /* Altura mínima consistente con otros botones */
+                    min-width: 80px;
+                }}
+                QPushButton:hover {{
+                    background-color: {COLORS.get('accent_blue_hover', '#0056b3')};
+                }}
+                QPushButton:pressed {{
+                    background-color: {COLORS.get('accent_blue_pressed', '#004080')}; /* Estilo para presionado */
+                }}
+            """)
+            msg_box_no_encontrado.exec()
+
             posicion_actual_antes_de_manual = self.posicion_input.text()
             self._clear_book_details_fields_and_disable_save() 
             self._fill_form_fields({}, make_editable=True) 
+            
+            # Asegurar explícitamente que los campos sean editables
+            self.titulo_input.setReadOnly(False)
+            self.autor_input.setReadOnly(False)
+            self.editorial_input.setReadOnly(False)
+            self.categorias_input.setReadOnly(False)
+            self.precio_input.setReadOnly(False)
+            self.posicion_input.setReadOnly(False) # Ya estaba, pero se mantiene por consistencia
+            self.imagen_input.setReadOnly(False) # Aunque oculto, mantenemos su estado lógico
+
             self.posicion_input.setText(posicion_actual_antes_de_manual)
-            self.posicion_input.setReadOnly(False)
-            self.titulo_input.setFocus(); self.titulo_input.selectAll()
+            
+            QTimer.singleShot(0, self.titulo_input.setFocus)
+            QTimer.singleShot(0, self.titulo_input.selectAll)
         
         if not self.precio_input.isReadOnly() and not self.posicion_input.isReadOnly():
             self.guardar_button.setEnabled(True)
         self._actualizar_estilo_guardar_button()
-        
-        if not self.detail_widgets_container.isVisible():
-             self._show_details_and_actions()
 
     def _limpiar_valor_precio(self, texto_con_formato: str) -> str: #
         return texto_con_formato.replace(".", "")
