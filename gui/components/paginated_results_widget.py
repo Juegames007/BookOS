@@ -15,7 +15,7 @@ class PaginatedResultsWidget(QWidget):
 
     # Constantes de la ventana principal que eran relevantes aquí
     RESULT_TABLE_WIDTH = 750      
-    MAX_BOOK_ROWS_PER_TABLE = 10
+    MAX_BOOK_ROWS_PER_TABLE = 8
     TABLES_PER_PAGE = 1          
 
     def __init__(self, parent=None):
@@ -117,7 +117,7 @@ class PaginatedResultsWidget(QWidget):
             self.boton_siguiente_resultados.show()
 
             headers = ["#", "Título", "Autor", "Categoría", "Posición", "Imagen"]
-            column_weights = [2, 5, 5, 5, 3, 3]
+            column_weights = [1, 6, 6, 6, 2, 2]
 
             num_libros = len(libros)
             libros_por_pagina_fisica = self.MAX_BOOK_ROWS_PER_TABLE * self.TABLES_PER_PAGE
@@ -142,7 +142,6 @@ class PaginatedResultsWidget(QWidget):
                     for _ in range(self.MAX_BOOK_ROWS_PER_TABLE):
                         if libro_idx_global < num_libros:
                             libro_data = libros[libro_idx_global]
-                            print(f"DEBUG: PaginatedResultsWidget - libro_data ANTES de append: {libro_data}") # DEBUG
                             # Adaptar libro_data al formato List[str] esperado por ResultsTableWidget.set_data
                             libros_para_esta_tabla.append([
                                 str(libro_idx_global + 1),

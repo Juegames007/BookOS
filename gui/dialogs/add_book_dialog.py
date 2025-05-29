@@ -172,21 +172,37 @@ class AddBookDialog(QDialog): #
         self._setup_ui()
 
     def _enable_blur(self, enable: bool):
-        if self.parent() and self._blur_effect:
-            self._blur_effect.setEnabled(enable)
-            # Forzar actualización del widget afectado por el efecto
-            if hasattr(self.parent(), 'centralWidget') and self.parent().centralWidget():
-                self.parent().centralWidget().update()
-            elif hasattr(self.parent(), 'current_stacked_widget') and self.parent().current_stacked_widget:
-                self.parent().current_stacked_widget.update()
-            # else:
-            #     self.parent().update()
+        if not self.parent() or not self._blur_effect:
+            return
+
+        target_widget = None
+        if hasattr(self.parent(), 'centralWidget') and self.parent().centralWidget():
+            target_widget = self.parent().centralWidget()
+        elif hasattr(self.parent(), 'current_stacked_widget') and self.parent().current_stacked_widget:
+            target_widget = self.parent().current_stacked_widget
+
+        if not target_widget:
+            return
+
+        if enable:
+            # Apply only if not already set or set by someone else
+            if target_widget.graphicsEffect() != self._blur_effect:
+                target_widget.setGraphicsEffect(self._blur_effect)
+            self._blur_effect.setEnabled(True)
+        else:
+            # Only disable and remove if our effect is currently active
+            if target_widget.graphicsEffect() == self._blur_effect:
+                self._blur_effect.setEnabled(False) # Disable it first
+                target_widget.setGraphicsEffect(None) # Then remove it
+        
+        target_widget.update()
 
     def exec(self): # Sobrescribir exec para manejar el desenfoque
         if self.parent():
             self._enable_blur(True)
         result = super().exec()
-        if self.parent():
+        # Check parent and blur_effect again, as parent might be closing
+        if self.parent() and self._blur_effect:
             self._enable_blur(False)
         return result
 
@@ -198,17 +214,20 @@ class AddBookDialog(QDialog): #
         # Se necesita manejar la eliminación del desenfoque cuando el diálogo se cierre de verdad.
 
     def accept(self): # Sobrescribir para quitar el desenfoque
-        if self.parent():
+        # Check parent and blur_effect again
+        if self.parent() and self._blur_effect:
             self._enable_blur(False)
         super().accept()
 
     def reject(self): # Sobrescribir para quitar el desenfoque
-        if self.parent():
+        # Check parent and blur_effect again
+        if self.parent() and self._blur_effect:
             self._enable_blur(False)
         super().reject()
     
     def closeEvent(self, event): # Asegurar que el desenfoque se quite al cerrar
-        if self.parent():
+        # Check parent and blur_effect again
+        if self.parent() and self._blur_effect:
             self._enable_blur(False)
         super().closeEvent(event)
 

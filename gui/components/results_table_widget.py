@@ -30,7 +30,7 @@ class ResultsTableWidget(QFrame):
         
         # Constantes de estilo (podrían pasarse o tomarse de un common.styles más específico)
         self.HEADER_ROW_HEIGHT = 30
-        self.BOOK_ROW_HEIGHT = 50
+        self.BOOK_ROW_HEIGHT = 45
         self.CELL_SPACING = 5
         self.ROW_SPACING = 5
         self.TABLE_CELL_PADDING = 5

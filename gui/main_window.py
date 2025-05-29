@@ -82,7 +82,7 @@ class VentanaGestionLibreria(QMainWindow):
     # CELL_SPACING = 5             
     # ROW_SPACING = 5              
     # TABLE_CELL_PADDING = 5       
-    INACTIVITY_TIMEOUT_MS = 60000  # 1 minuto
+    # INACTIVITY_TIMEOUT_MS = 60000  # 1 minuto
 
     # Atributo para almacenar la ventana de resultados si está abierta
     # self.current_search_results_window = None # Se puede manejar localmente en el método de búsqueda
@@ -161,13 +161,13 @@ class VentanaGestionLibreria(QMainWindow):
             self._setup_ui_normal()
 
         # Timer de inactividad (ya no necesita cambiar de vista, podría cerrar la ventana de resultados si estuviera abierta)
-        self.inactivity_timer = QTimer(self)
-        self.inactivity_timer.setInterval(self.INACTIVITY_TIMEOUT_MS)
-        self.inactivity_timer.timeout.connect(self._handle_inactivity) # Cambiado a un nuevo manejador
-        self.inactivity_timer.start()
+        # self.inactivity_timer = QTimer(self)
+        # self.inactivity_timer.setInterval(self.INACTIVITY_TIMEOUT_MS)
+        # self.inactivity_timer.timeout.connect(self._handle_inactivity) # Cambiado a un nuevo manejador
+        # self.inactivity_timer.start()
 
         # Instalar filtro de eventos para detectar actividad
-        self.installEventFilter(self)
+        # self.installEventFilter(self)
 
         # self.animation_group = QParallelAnimationGroup(self) # Ya no es necesario para transiciones de main_window
         self.current_search_results_window = None # Para mantener una referencia si es necesario
@@ -180,28 +180,28 @@ class VentanaGestionLibreria(QMainWindow):
         # Se ha movido a MenuSectionWidget.
         pass # El contenido se crea en __init__ y se añade al root_layout_main_menu
 
-    def _handle_inactivity(self):
-        """Maneja la inactividad. Cierra la ventana de resultados si está abierta."""
-        if hasattr(self, 'current_search_results_window') and self.current_search_results_window and self.current_search_results_window.isVisible():
-            print("Cerrando ventana de resultados por inactividad.")
-            self.current_search_results_window.close()
-        # Por ahora, solo reinicia el timer si la ventana principal está activa.
-        if self.isActiveWindow():
-             self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS)
+    # def _handle_inactivity(self):
+    #     """Maneja la inactividad. Cierra la ventana de resultados si está abierta."""
+    #     if hasattr(self, 'current_search_results_window') and self.current_search_results_window and self.current_search_results_window.isVisible():
+    #         print("Cerrando ventana de resultados por inactividad.")
+    #         self.current_search_results_window.close()
+    #     # Por ahora, solo reinicia el timer si la ventana principal está activa.
+    #     # if self.isActiveWindow():
+    #     #      self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS)
 
-    def _handle_search_results_closed(self):
-        """Se llama cuando la ventana de resultados de búsqueda se cierra."""
-        print("Ventana de resultados cerrada, reiniciando temporizador de inactividad de la ventana principal.")
-        if not self.inactivity_timer.isActive(): # Solo reiniciar si no estaba ya activo por alguna razón
-            self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS)
+    # def _handle_search_results_closed(self):
+    #     """Se llama cuando la ventana de resultados de búsqueda se cierra."""
+    #     print("Ventana de resultados cerrada, reiniciando temporizador de inactividad de la ventana principal.")
+    #     # if not self.inactivity_timer.isActive(): # Solo reiniciar si no estaba ya activo por alguna razón
+    #     #     self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS)
         
-        # Desconectar la señal para evitar múltiples conexiones si la ventana se reutiliza o se crea otra
-        if self.current_search_results_window:
-            try:
-                self.current_search_results_window.finished.disconnect(self._handle_search_results_closed)
-            except RuntimeError: # La señal podría ya no estar conectada o el objeto destruido
-                pass
-        # self.current_search_results_window = None # Opcional: limpiar la referencia
+    #     # Desconectar la señal para evitar múltiples conexiones si la ventana se reutiliza o se crea otra
+    #     if self.current_search_results_window:
+    #         try:
+    #             self.current_search_results_window.finished.disconnect(self._handle_search_results_closed)
+    #         except RuntimeError: # La señal podría ya no estar conectada o el objeto destruido
+    #             pass
+    #     # self.current_search_results_window = None # Opcional: limpiar la referencia
 
     def _iniciar_busqueda_desde_componente(self, termino_busqueda: str, filtros: dict):
         """Se llama cuando SearchBarWidget emite la señal search_requested."""
@@ -224,12 +224,12 @@ class VentanaGestionLibreria(QMainWindow):
             self.current_search_results_window = SearchResultsWindow(libros_encontrados, termino_busqueda, self)
             
             # Detener el temporizador de inactividad de la ventana principal
-            if self.inactivity_timer.isActive():
-                print("Deteniendo temporizador de inactividad de la ventana principal.")
-                self.inactivity_timer.stop()
+            # if self.inactivity_timer.isActive():
+            #     print("Deteniendo temporizador de inactividad de la ventana principal.")
+            #     self.inactivity_timer.stop()
             
             # Conectar la señal 'finished' para saber cuándo se cierra la ventana de resultados
-            self.current_search_results_window.finished.connect(self._handle_search_results_closed)
+            # self.current_search_results_window.finished.connect(self._handle_search_results_closed)
             
             self.current_search_results_window.show()
             
@@ -277,18 +277,19 @@ class VentanaGestionLibreria(QMainWindow):
         # elif self.stacked_widget.currentWidget() == self.search_results_widget: ...
         super().keyPressEvent(event)
 
-    def eventFilter(self, obj, event):
-        # Reinicia el temporizador de inactividad en cualquier evento de mouse o teclado
-        if event.type() in [
-            QEvent.Type.MouseMove,
-            QEvent.Type.KeyPress,
-            QEvent.Type.MouseButtonPress,
-            QEvent.Type.MouseButtonRelease
-        ]:
-            if self.inactivity_timer.isActive(): # Solo reiniciar si está activo
-                self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS) # Reinicia con el intervalo completo
+    # def eventFilter(self, obj, event):
+    #     # Reinicia el temporizador de inactividad en cualquier evento de mouse o teclado
+    #     if event.type() in [
+    #         QEvent.Type.MouseMove,
+    #         QEvent.Type.KeyPress,
+    #         QEvent.Type.MouseButtonPress,
+    #         QEvent.Type.MouseButtonRelease
+    #     ]:
+    #         # if self.inactivity_timer.isActive(): # Solo reiniciar si está activo
+    #         #     self.inactivity_timer.start(self.INACTIVITY_TIMEOUT_MS) # Reinicia con el intervalo completo
+    #         pass # El timer está deshabilitado
 
-        return super().eventFilter(obj, event)
+    #     return super().eventFilter(obj, event)
 
     def _handle_menu_action(self, accion: str):
         """Maneja las acciones disparadas desde los botones del menú principal (MainMenuCard)."""
