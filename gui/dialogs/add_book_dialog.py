@@ -713,7 +713,7 @@ class AddBookDialog(QDialog): #
         self._actualizar_estilo_guardar_button()
 
     def _limpiar_valor_precio(self, texto_con_formato: str) -> str: #
-        return texto_con_formato.replace(".", "")
+        return ''.join(c for c in texto_con_formato if c.isdigit()) # Modificado para quitar todo lo no numérico
 
     def _formatear_texto_precio(self): #
         current_text_limpio = self._limpiar_valor_precio(self.precio_input.text())

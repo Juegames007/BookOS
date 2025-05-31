@@ -18,8 +18,10 @@ try:
     CURRENT_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
     # Navigate two levels up (components -> gui -> project_root) then to app/imagenes/
     VER_ICON_PATH = os.path.join(os.path.dirname(os.path.dirname(CURRENT_SCRIPT_DIR)), "app", "imagenes", "ver.png")
+    NO_VER_ICON_PATH = os.path.join(os.path.dirname(os.path.dirname(CURRENT_SCRIPT_DIR)), "app", "imagenes", "no_ver.png") # Define path for no_ver.png
 except NameError: # Fallback if __file__ is not defined
     VER_ICON_PATH = os.path.join("app", "imagenes", "ver.png")
+    NO_VER_ICON_PATH = os.path.join("app", "imagenes", "no_ver.png")
 
 
 class BookDetailWidget(QFrame):
@@ -49,9 +51,10 @@ class BookDetailWidget(QFrame):
         text_color_primary = COLORS.get('text_primary', '#222222')
         text_color_secondary = COLORS.get('text_secondary', '#444444')
         label_text_color = COLORS.get('text_label', '#666666')
-        label_font_size = FONTS.get("size_small", 10) # Reduced label font size
-        # Uniform font size for all data values
-        value_font_size_uniform = FONTS.get("size_uniform", 12) # Reduced value font size
+        label_font_size = FONTS.get("size_small", 10) 
+        # Uniform font size for all data values, title can be slightly larger or bolder.
+        value_font_size_uniform = FONTS.get("size_uniform", 11) 
+        title_value_font_size = FONTS.get("size_normal", 11) # Reduced title font size, was size_medium (12)
 
         # --- Title --- 
         self.title_static_label = QLabel("Título:")
@@ -60,8 +63,8 @@ class BookDetailWidget(QFrame):
         self.details_layout.addWidget(self.title_static_label)
 
         self.title_label = QLabel("Título del Libro")
-        # Title remains bold, but uses uniform size
-        title_font = QFont(self.font_family, value_font_size_uniform, QFont.Weight.Bold)
+        # Title remains bold, but uses specific size
+        title_font = QFont(self.font_family, title_value_font_size, QFont.Weight.Bold)
         self.title_label.setFont(title_font)
         self.title_label.setStyleSheet(f"color: {text_color_primary}; background-color: transparent;")
         self.title_label.setWordWrap(True)
@@ -75,7 +78,7 @@ class BookDetailWidget(QFrame):
         self.details_layout.addWidget(self.author_static_label)
 
         self.author_label = QLabel("Autor")
-        author_font = QFont(self.font_family, value_font_size_uniform) # Uniform size
+        author_font = QFont(self.font_family, value_font_size_uniform) 
         self.author_label.setFont(author_font)
         self.author_label.setStyleSheet(f"color: {text_color_secondary}; background-color: transparent;")
         self.author_label.setWordWrap(True)
@@ -89,11 +92,24 @@ class BookDetailWidget(QFrame):
         self.details_layout.addWidget(self.category_static_label)
 
         self.category_label = QLabel("Categoría")
-        category_font = QFont(self.font_family, value_font_size_uniform) # Uniform size
+        category_font = QFont(self.font_family, value_font_size_uniform) 
         self.category_label.setFont(category_font)
         self.category_label.setStyleSheet(f"color: {text_color_secondary}; background-color: transparent;")
         self.category_label.setWordWrap(True)
         self.details_layout.addWidget(self.category_label)
+        self.details_layout.addSpacing(6)
+
+        # --- Price ---
+        self.price_static_label = QLabel("Precio:")
+        self.price_static_label.setFont(QFont(self.font_family, label_font_size, QFont.Weight.Normal))
+        self.price_static_label.setStyleSheet(f"color: {label_text_color}; background-color: transparent; margin-bottom: -3px;")
+        self.details_layout.addWidget(self.price_static_label)
+
+        self.price_label = QLabel("$0.00")
+        price_font = QFont(self.font_family, value_font_size_uniform)
+        self.price_label.setFont(price_font)
+        self.price_label.setStyleSheet(f"color: {text_color_secondary}; background-color: transparent;")
+        self.details_layout.addWidget(self.price_label)
         self.details_layout.addSpacing(6)
 
         # --- Position --- 
@@ -103,7 +119,7 @@ class BookDetailWidget(QFrame):
         self.details_layout.addWidget(self.position_static_label)
 
         self.position_label = QLabel("Posición")
-        position_font = QFont(self.font_family, value_font_size_uniform) # Uniform size
+        position_font = QFont(self.font_family, value_font_size_uniform) 
         self.position_label.setFont(position_font)
         self.position_label.setStyleSheet(f"color: {text_color_secondary}; background-color: transparent;")
         self.position_label.setWordWrap(True)
@@ -111,35 +127,39 @@ class BookDetailWidget(QFrame):
         self.details_layout.addSpacing(10) # Add some spacing before the button
 
         # --- Image Button --- 
-        self.view_image_button = QPushButton(" Ver Imagen")
+        self.view_image_button = QPushButton(" View Image") # Keep space for icon
         
-        font_size_px = str(FONTS.get("size_normal", 11)) + "px"
-        neutral_button_style = ("""
-            QPushButton {
-                background-color: rgba(255, 255, 255, 0.65);
-                border: 1px solid rgba(230, 230, 230, 0.75);
-                color: #222222;
-                padding: 6px 10px;
-                border-radius: 5px;
-                font-size: %s;
-            }
-            QPushButton:hover { background-color: rgba(255, 255, 255, 0.75); }
-            QPushButton:pressed { background-color: rgba(255, 255, 255, 0.6); }
-        """ % font_size_px)
+        # Consistent styling with other modern buttons
+        button_font_size = FONTS.get("size_normal", 11)
+        button_text_color = COLORS.get("text_primary", "#222222")
+        button_bg_color = "rgba(200, 200, 200, 0.5)" # Light gray, semi-transparent
+        button_hover_bg_color = "rgba(200, 200, 200, 0.7)"
+        button_pressed_bg_color = "rgba(180, 180, 180, 0.6)"
 
-        self.view_image_button.setStyleSheet(neutral_button_style)
+        image_button_style = (f"""
+            QPushButton {{
+                background-color: {button_bg_color};
+                border: 1px solid rgba(0, 0, 0, 0.1);
+                color: {button_text_color};
+                padding: 5px 10px;
+                border-radius: 5px;
+                font-size: {button_font_size}pt; 
+            }}
+            QPushButton:hover {{ background-color: {button_hover_bg_color}; }}
+            QPushButton:pressed {{ background-color: {button_pressed_bg_color}; }}
+            QPushButton:disabled {{ 
+                background-color: rgba(200, 200, 200, 0.3);
+                color: rgba(0,0,0,0.4);
+            }}
+        """)
+
+        self.view_image_button.setStyleSheet(image_button_style)
         self.view_image_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.view_image_button.clicked.connect(self._on_view_image_clicked)
         self.view_image_button.setVisible(False)
         self.view_image_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.view_image_button.setMinimumHeight(32) # Reduced height
+        self.view_image_button.setMinimumHeight(32) 
         self.view_image_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-
-        if os.path.exists(VER_ICON_PATH):
-            self.view_image_button.setIcon(QIcon(VER_ICON_PATH))
-            self.view_image_button.setIconSize(QSize(16,16)) # Reduced icon size
-        else:
-            print(f"Advertencia: Ícono 'ver.png' no encontrado en {VER_ICON_PATH}")
 
         self.details_layout.addWidget(self.view_image_button, 0, Qt.AlignmentFlag.AlignLeft)
         
@@ -160,11 +180,13 @@ class BookDetailWidget(QFrame):
         self.author_static_label.setVisible(is_book_selected)
         self.category_static_label.setVisible(is_book_selected)
         self.position_static_label.setVisible(is_book_selected)
+        self.price_static_label.setVisible(is_book_selected) # Show/hide price label
 
         if not is_book_selected:
             self.title_label.setText("Seleccione un libro") # Keep this centered or styled for prompt
             self.author_label.setText("")
             self.category_label.setText("")
+            self.price_label.setText("") # Clear price label
             self.position_label.setText("")
             self.view_image_button.setVisible(False)
             return
@@ -175,9 +197,62 @@ class BookDetailWidget(QFrame):
         if isinstance(categories, list):
             self.category_label.setText(', '.join(categories) if categories else 'N/A') # Removed "Categoría: " prefix
         else: self.category_label.setText(categories if categories else 'N/A')
-        self.position_label.setText(book_data.get('Posición', 'N/A')) # Removed "Posición: " prefix
+        
+        # Display Price with formatting
+        price_value = book_data.get('Precio')
+        if price_value is not None:
+            try:
+                # Format as integer with thousands separator for Colombian pesos
+                price_text = f"$ {int(price_value):,}".replace(",", ".")
+            except (ValueError, TypeError): 
+                price_text = str(price_value) 
+        else:
+            price_text = "N/A"
+        self.price_label.setText(price_text)
+
+        self.position_label.setText(book_data.get('Posición', 'N/A'))
         image_url = book_data.get("Imagen", "")
-        self.view_image_button.setVisible(bool(image_url))
+        has_image_url = bool(image_url)
+
+        self.view_image_button.setVisible(True) # Always visible, icon/text changes
+
+        print(f"[BookDetailWidget] Updating. Has image URL: {has_image_url}")
+
+        if has_image_url:
+            self.view_image_button.setText(" View Image") # Text for button with icon
+            print(f"[BookDetailWidget] Attempting to load icon from: {VER_ICON_PATH}")
+            if os.path.exists(VER_ICON_PATH):
+                print(f"[BookDetailWidget] Icon '{os.path.basename(VER_ICON_PATH)}' exists.")
+                self.view_image_button.setIcon(QIcon(VER_ICON_PATH))
+                self.view_image_button.setToolTip("View Image")
+            else:
+                print(f"[BookDetailWidget] Advertencia: Icon '{os.path.basename(VER_ICON_PATH)}' NOT FOUND. Text only.")
+                self.view_image_button.setIcon(QIcon()) # Clear icon
+                self.view_image_button.setToolTip(f"Icon {os.path.basename(VER_ICON_PATH)} not found")
+            # Ensure click is enabled
+            if not self.view_image_button.signalsBlocked():
+                 try: self.view_image_button.clicked.disconnect(self._on_view_image_clicked) # disconnect first to avoid multiple connections
+                 except RuntimeError: pass # Vey likely to happen on first connection
+                 self.view_image_button.clicked.connect(self._on_view_image_clicked)
+            self.view_image_button.setEnabled(True)
+
+        else: # No image URL in book data
+            self.view_image_button.setText(" No Image") # Text for button with no_ver_icon or if icon fails
+            print(f"[BookDetailWidget] No image URL. Attempting to load icon from: {NO_VER_ICON_PATH}")
+            if os.path.exists(NO_VER_ICON_PATH):
+                print(f"[BookDetailWidget] Icon '{os.path.basename(NO_VER_ICON_PATH)}' exists for no image URL.")
+                self.view_image_button.setIcon(QIcon(NO_VER_ICON_PATH))
+                self.view_image_button.setToolTip("No image available")
+            else:
+                print(f"[BookDetailWidget] Advertencia: Fallback icon '{os.path.basename(NO_VER_ICON_PATH)}' NOT FOUND. Text only.")
+                self.view_image_button.setIcon(QIcon()) # Clear icon
+                self.view_image_button.setToolTip(f"No image available and icon {os.path.basename(NO_VER_ICON_PATH)} not found")
+            # Disable click or change behavior for no image
+            try: self.view_image_button.clicked.disconnect(self._on_view_image_clicked) # Disconnect since no action
+            except RuntimeError: pass
+            self.view_image_button.setEnabled(False) # Disable button if no image URL
+
+        self.view_image_button.setIconSize(QSize(16,16))
 
     def _on_view_image_clicked(self):
         if self._current_book_data:
@@ -202,6 +277,7 @@ if __name__ == '__main__':
         "Autor": "Dr. Fantástico Programador",
         "Categorías": ["Ciencia Ficción", "Aventura"],
         "Posición": "A1-01-Alpha",
+        "Precio": "29.99", # Added Price
         "Imagen": "https://www.ejemplo.com/imagen_libro.jpg" # Replace with a real image URL for testing button
     }
     no_image_book = {
@@ -209,6 +285,7 @@ if __name__ == '__main__':
         "Autor": "Profesor Anónimo",
         "Categorías": ["No Ficción", "Guías Prácticas"],
         "Posición": "Z9-99-Zeta",
+        "Precio": "15.50", # Added Price
         "Imagen": "" 
     }
 

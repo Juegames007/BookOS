@@ -1,13 +1,14 @@
 import os
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QWidget, QGraphicsBlurEffect, 
-    QLabel, QFrame, QSpacerItem, QSizePolicy, QApplication
+    QLabel, QFrame, QSpacerItem, QSizePolicy, QApplication, QStackedWidget
 )
 from PySide6.QtCore import Qt, Signal, QPoint, QEvent, QUrl, QSize, QTimer
 from PySide6.QtGui import QIcon, QPainter, QPixmap, QMouseEvent, QFont, QDesktopServices, QScreen
 
 from gui.components.result_list_widget import ResultListWidget
 from gui.components.book_detail_widget import BookDetailWidget
+from gui.components.book_list_view_widget import BookListViewWidget
 from gui.common.styles import FONTS, COLORS
 
 # Attempt to get icon paths, provide defaults if not found
@@ -16,9 +17,11 @@ try:
     # Navigate two levels up (dialogs -> gui -> project_root) then to app/imagenes/
     ICON_BASE_PATH_SRW = os.path.join(os.path.dirname(os.path.dirname(CURRENT_SCRIPT_DIR_SRW)), "app", "imagenes")
     BACK_ICON_PATH = os.path.join(ICON_BASE_PATH_SRW, "atras.png") # Changed to atras.png
+    VIEW_TOGGLE_ICON_PATH = os.path.join(ICON_BASE_PATH_SRW, "view_toggle_icon.png") # Icon for view toggle
 except NameError:
     BACK_ICON_PATH = ""
-    print("Warning: Icon path for atras.png could not be determined.")
+    VIEW_TOGGLE_ICON_PATH = ""
+    print("Warning: Icon path for atras.png or view_toggle_icon.png could not be determined.")
 
 class SearchResultsWindow(QDialog):
     # INACTIVITY_TIMEOUT_MS_RESULTS = 120000 # Timer logic removed
@@ -34,7 +37,9 @@ class SearchResultsWindow(QDialog):
 
         self._drag_pos = QPoint()
         self.top_bar_height = 42 # Slightly increased top bar height
-        self.setMinimumSize(700, 410) # Reduced minimum height
+        self.setMinimumSize(800, 410) # Reduced minimum height
+        self.libros_actuales = [] # Store current books for view updates
+        self.termino_busqueda_actual = termino_busqueda
 
         # Blur effect logic (kept as is for now)
         self._blur_effect = None
@@ -91,6 +96,20 @@ class SearchResultsWindow(QDialog):
         top_bar_layout.addWidget(self.window_title_label)
 
         top_bar_layout.addSpacerItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
+
+        # View Toggle Button
+        self.view_toggle_button = QPushButton()
+        if os.path.exists(VIEW_TOGGLE_ICON_PATH):
+            self.view_toggle_button.setIcon(QIcon(VIEW_TOGGLE_ICON_PATH))
+            self.view_toggle_button.setIconSize(QSize(18,18))
+        else:
+            self.view_toggle_button.setText("≡") # Placeholder for three stripes
+        self.view_toggle_button.setFixedSize(28, 28)
+        self.view_toggle_button.setStyleSheet("QPushButton { background-color: transparent; border: none; color: #555555; } QPushButton:hover { background-color: rgba(0,0,0,0.05); border-radius: 4px; }")
+        self.view_toggle_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.view_toggle_button.clicked.connect(self._toggle_view)
+        top_bar_layout.addWidget(self.view_toggle_button)
+
         # Add other icons (search, menu) here if needed later, as per image
 
         self.main_layout.addWidget(self.top_bar_widget)
@@ -120,12 +139,16 @@ class SearchResultsWindow(QDialog):
 
         card_main_layout.addWidget(self.top_bar_widget) # Add top bar to the card
 
-        # --- Content Area within the Card --- 
-        self.content_area_widget_internal = QWidget() # This QWidget is inside the card_main_layout
-        self.content_area_widget_internal.setStyleSheet("background-color: transparent;")
-        content_area_layout_internal = QHBoxLayout(self.content_area_widget_internal)
-        content_area_layout_internal.setContentsMargins(8, 8, 8, 0) # Reduced padding
-        content_area_layout_internal.setSpacing(8) # Reduced spacing
+        # --- Stacked Widget for different views ---
+        self.view_stack = QStackedWidget()
+        self.view_stack.setStyleSheet("background-color: transparent;")
+
+        # --- View 1: Detail View (Current Sidebar + Detail Pane) ---
+        self.detail_view_widget = QWidget()
+        self.detail_view_widget.setStyleSheet("background-color: transparent;")
+        detail_view_layout = QHBoxLayout(self.detail_view_widget)
+        detail_view_layout.setContentsMargins(8, 8, 8, 0)
+        detail_view_layout.setSpacing(8)
 
         self.result_list_widget = ResultListWidget()
         # Set a maximum width for the list widget to control its size
@@ -133,15 +156,24 @@ class SearchResultsWindow(QDialog):
         self.book_detail_widget = BookDetailWidget()
         self.book_detail_widget.setStyleSheet("QFrame#bookDetailFrame { background-color: transparent; border: none; }")
 
-        content_area_layout_internal.addWidget(self.result_list_widget, 2) # Adjusted stretch factor (e.g. 2 out of 5 parts)
-        content_area_layout_internal.addWidget(self.book_detail_widget, 3) # Adjusted stretch factor (e.g. 3 out of 5 parts)
+        detail_view_layout.addWidget(self.result_list_widget, 2) # Adjusted stretch factor (e.g. 2 out of 5 parts)
+        detail_view_layout.addWidget(self.book_detail_widget, 3) # Adjusted stretch factor (e.g. 3 out of 5 parts)
         
-        card_main_layout.addWidget(self.content_area_widget_internal, 1)
+        self.view_stack.addWidget(self.detail_view_widget)
+
+        # --- View 2: Row/List View ---
+        self.book_list_view_widget = BookListViewWidget() 
+        self.view_stack.addWidget(self.book_list_view_widget)
+
+        card_main_layout.addWidget(self.view_stack, 1)
         self.main_layout.addWidget(self.unified_content_card, 1)
         
         # Connect signals
         self.result_list_widget.item_selected.connect(self.book_detail_widget.update_details)
         self.book_detail_widget.image_view_requested.connect(self._handle_image_view_request)
+        # Connect the BookListViewWidget's signal as well
+        if hasattr(self, 'book_list_view_widget') and self.book_list_view_widget:
+            self.book_list_view_widget.image_view_requested.connect(self._handle_image_view_request)
 
         # Initial content update
         self.update_content(libros_encontrados, termino_busqueda)
@@ -181,6 +213,7 @@ class SearchResultsWindow(QDialog):
 
     def _handle_image_view_request(self, image_url: str):
         if image_url:
+            print(f"[SearchResultsWindow] Handling image_view_request for URL: {image_url}")
             QDesktopServices.openUrl(QUrl(image_url))
 
     # Event filter for timer removed
@@ -246,7 +279,7 @@ class SearchResultsWindow(QDialog):
             self.move(event.globalPosition().toPoint() - self._drag_pos)
             event.accept()
         else:
-            super().mouseMoveEvent(event)
+            super().mouseMoveEvent(event) 
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         self._drag_pos = QPoint()
@@ -272,22 +305,37 @@ class SearchResultsWindow(QDialog):
         else:
             super().keyPressEvent(event)
 
+    def _toggle_view(self):
+        current_index = self.view_stack.currentIndex()
+        next_index = (current_index + 1) % self.view_stack.count()
+        # Ensure count is not zero to prevent modulo by zero if stack is empty (shouldn't happen here)
+        if self.view_stack.count() > 0:
+            next_index = (current_index + 1) % self.view_stack.count()
+            self.view_stack.setCurrentIndex(next_index)
+        # Potentially update button icon/text based on current view
+        # if next_index == 0: self.view_toggle_button.setText("≡") 
+        # else: self.view_toggle_button.setText("□") # Example for switching icon
+
     def update_content(self, libros_encontrados: list, termino_busqueda: str):
-        # The window title in the top bar is static "Search results"
-        # self.window_title_label.setText(f"Search results for: '{termino_busqueda}'") # If dynamic title needed
+        self.libros_actuales = libros_encontrados
+        self.termino_busqueda_actual = termino_busqueda
+        
         self.result_list_widget.update_results(libros_encontrados)
-        # Automatically select first item and update detail view if results exist
         if libros_encontrados:
             self.book_detail_widget.update_details(libros_encontrados[0])
             self.result_list_widget.set_selected_index(0)
         else:
-            self.book_detail_widget.update_details({}) # Clear details if no results
+            self.book_detail_widget.update_details({})
+        
+        # Update other views if they exist and are implemented
+        if hasattr(self, 'book_list_view_widget') and self.book_list_view_widget:
+            self.book_list_view_widget.update_results(libros_encontrados)
 
 # Example Usage for the new SearchResultsWindow
 if __name__ == '__main__':
     import sys
     app = QApplication(sys.argv)
-
+    
     # Mock FONTS and COLORS if not available in your project structure
     if 'FONTS' not in globals():
         FONTS = {"family": "Arial", "size_large": 16, "size_normal": 12}
