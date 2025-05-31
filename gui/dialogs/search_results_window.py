@@ -1,10 +1,10 @@
 import os
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QWidget, QGraphicsBlurEffect, 
-    QLabel, QFrame, QSpacerItem, QSizePolicy
+    QLabel, QFrame, QSpacerItem, QSizePolicy, QApplication
 )
-from PySide6.QtCore import Qt, Signal, QPoint, QEvent, QUrl, QSize
-from PySide6.QtGui import QIcon, QPainter, QPixmap, QMouseEvent, QFont, QDesktopServices
+from PySide6.QtCore import Qt, Signal, QPoint, QEvent, QUrl, QSize, QTimer
+from PySide6.QtGui import QIcon, QPainter, QPixmap, QMouseEvent, QFont, QDesktopServices, QScreen
 
 from gui.components.result_list_widget import ResultListWidget
 from gui.components.book_detail_widget import BookDetailWidget
@@ -15,10 +15,10 @@ try:
     CURRENT_SCRIPT_DIR_SRW = os.path.dirname(os.path.abspath(__file__))
     # Navigate two levels up (dialogs -> gui -> project_root) then to app/imagenes/
     ICON_BASE_PATH_SRW = os.path.join(os.path.dirname(os.path.dirname(CURRENT_SCRIPT_DIR_SRW)), "app", "imagenes")
-    BACK_ICON_PATH = os.path.join(ICON_BASE_PATH_SRW, "back_arrow.png") # Create/get a suitable back arrow icon
+    BACK_ICON_PATH = os.path.join(ICON_BASE_PATH_SRW, "atras.png") # Changed to atras.png
 except NameError:
     BACK_ICON_PATH = ""
-    print("Warning: Icon path for back_arrow.png could not be determined.")
+    print("Warning: Icon path for atras.png could not be determined.")
 
 class SearchResultsWindow(QDialog):
     # INACTIVITY_TIMEOUT_MS_RESULTS = 120000 # Timer logic removed
@@ -30,11 +30,11 @@ class SearchResultsWindow(QDialog):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         # Darker, more opaque base for better glass effect depth
-        self.setStyleSheet("QDialog { background-color: rgba(30, 30, 35, 0.85); border-radius: 12px; }")
+        self.setStyleSheet("QDialog { background-color: rgba(30, 30, 35, 0.99); border-radius: 12px; }") # Corrected and increased alpha
 
         self._drag_pos = QPoint()
-        self.top_bar_height = 45 # Reduced top bar height
-        self.setMinimumSize(780, 530) # Slightly reduced overall size
+        self.top_bar_height = 42 # Slightly increased top bar height
+        self.setMinimumSize(700, 410) # Reduced minimum height
 
         # Blur effect logic (kept as is for now)
         self._blur_effect = None
@@ -55,7 +55,7 @@ class SearchResultsWindow(QDialog):
 
         # --- Main Layout --- (Vertical: Top Bar, Content Area)
         self.main_layout = QVBoxLayout(self)
-        self.main_layout.setContentsMargins(8, 8, 8, 8) # Reduced main margin for the card
+        self.main_layout.setContentsMargins(6, 6, 6, 6) # Reduced main margin for the card
         self.main_layout.setSpacing(0) 
 
         # --- Top Bar --- (Horizontal: Back Button, Title, Spacer)
@@ -65,18 +65,18 @@ class SearchResultsWindow(QDialog):
         # Style of top_bar_widget will now be part of the unified_content_card
 
         top_bar_layout = QHBoxLayout(self.top_bar_widget)
-        top_bar_layout.setContentsMargins(10, 0, 10, 0) # Reduced top bar margins
-        top_bar_layout.setSpacing(8)
+        top_bar_layout.setContentsMargins(8, 0, 8, 0) # Reduced top bar margins
+        top_bar_layout.setSpacing(6)
 
         self.back_button = QPushButton()
         if os.path.exists(BACK_ICON_PATH):
             self.back_button.setIcon(QIcon(BACK_ICON_PATH))
-            self.back_button.setIconSize(QSize(20,20))
+            self.back_button.setIconSize(QSize(18,18))
             # If you have a dark version of the back arrow, use it here.
             # For now, we assume the icon is neutral or we tint it via stylesheet if possible (QIcon doesn't tint easily)
         else:
             self.back_button.setText("<") # Simpler fallback text
-        self.back_button.setFixedSize(30, 30)
+        self.back_button.setFixedSize(28, 28)
         # Darker icon/text for light top bar, subtle hover
         self.back_button.setStyleSheet("QPushButton { background-color: transparent; border: none; color: #555555; } QPushButton:hover { background-color: rgba(0,0,0,0.05); border-radius: 4px; }")
         self.back_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -85,7 +85,7 @@ class SearchResultsWindow(QDialog):
 
         self.window_title_label = QLabel("Search results")
         # Darker text for better visibility on lighter top bar
-        title_font = QFont(FONTS.get("family", "Arial"), FONTS.get("size_large", 16), QFont.Weight.DemiBold)
+        title_font = QFont(FONTS.get("family", "Arial"), FONTS.get("size_large", 14), QFont.Weight.DemiBold) # Reduced font size
         self.window_title_label.setFont(title_font)
         self.window_title_label.setStyleSheet(f"color: {COLORS.get('text_primary', '#222222')}; background-color: transparent;")
         top_bar_layout.addWidget(self.window_title_label)
@@ -115,7 +115,7 @@ class SearchResultsWindow(QDialog):
             }}
         """)
         card_main_layout = QVBoxLayout(self.unified_content_card)
-        card_main_layout.setContentsMargins(0,0,0,10) # Reduced bottom margin
+        card_main_layout.setContentsMargins(0,0,0,8) # Reduced bottom margin
         card_main_layout.setSpacing(0)
 
         card_main_layout.addWidget(self.top_bar_widget) # Add top bar to the card
@@ -124,12 +124,12 @@ class SearchResultsWindow(QDialog):
         self.content_area_widget_internal = QWidget() # This QWidget is inside the card_main_layout
         self.content_area_widget_internal.setStyleSheet("background-color: transparent;")
         content_area_layout_internal = QHBoxLayout(self.content_area_widget_internal)
-        content_area_layout_internal.setContentsMargins(10, 10, 10, 0) # Reduced padding
-        content_area_layout_internal.setSpacing(10) # Reduced spacing
+        content_area_layout_internal.setContentsMargins(8, 8, 8, 0) # Reduced padding
+        content_area_layout_internal.setSpacing(8) # Reduced spacing
 
         self.result_list_widget = ResultListWidget()
         # Set a maximum width for the list widget to control its size
-        self.result_list_widget.setMaximumWidth(280) # Adjust as needed
+        self.result_list_widget.setMaximumWidth(240) # Increased width
         self.book_detail_widget = BookDetailWidget()
         self.book_detail_widget.setStyleSheet("QFrame#bookDetailFrame { background-color: transparent; border: none; }")
 
@@ -146,9 +146,38 @@ class SearchResultsWindow(QDialog):
         # Initial content update
         self.update_content(libros_encontrados, termino_busqueda)
         
-        self.setModal(False)
+        self.setModal(True) # Set dialog to be modal
         # Timer logic removed
         # Event filter for timer removed
+
+    def _center_window(self):
+        # Use frameGeometry().size() for dimensions including the window frame
+        dialog_frame_size = self.frameGeometry().size() 
+        parent = self.parent()
+
+        if parent:
+            parent_geometry = parent.geometry()
+            # Center relative to the parent's client area
+            target_center_x = parent_geometry.x() + parent_geometry.width() / 2
+            target_center_y = parent_geometry.y() + parent_geometry.height() / 2
+        else:
+            current_screen = self.screen()
+            if not current_screen: # Fallback if self.screen() is None early
+                current_screen = QApplication.primaryScreen()
+            
+            if current_screen:
+                screen_geometry = current_screen.availableGeometry()
+                # Center relative to the screen's available geometry
+                target_center_x = screen_geometry.x() + screen_geometry.width() / 2
+                target_center_y = screen_geometry.y() + screen_geometry.height() / 2
+            else:
+                return # Cannot center if no screen info
+            
+        # Calculate new top-left position for the dialog's frame
+        new_x = target_center_x - dialog_frame_size.width() / 2
+        new_y = target_center_y - dialog_frame_size.height() / 2
+        
+        self.move(int(new_x), int(new_y))
 
     def _handle_image_view_request(self, image_url: str):
         if image_url:
@@ -181,6 +210,7 @@ class SearchResultsWindow(QDialog):
     def showEvent(self, event):
         super().showEvent(event)
         if self.parent(): self._enable_blur(True)
+        QTimer.singleShot(0, self._center_window) # Defer centering
 
     def exec(self):
         if self.parent(): self._enable_blur(True)

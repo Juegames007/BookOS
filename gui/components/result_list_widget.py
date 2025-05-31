@@ -4,14 +4,14 @@ from PySide6.QtGui import QIcon # For icons on buttons
 import os
 from typing import List, Dict, Any
 
-MAX_CHARS_SIDEBAR_TITLE = 25 # Max characters for truncated titles in the sidebar
+MAX_CHARS_SIDEBAR_TITLE = 25 # Increased max characters
 
 # --- Icon Paths for Navigation Buttons (assuming they are in app/imagenes) ---
 try:
     CURRENT_SCRIPT_DIR_RLW = os.path.dirname(os.path.abspath(__file__))
     ICON_BASE_PATH_RLW = os.path.join(os.path.dirname(os.path.dirname(CURRENT_SCRIPT_DIR_RLW)), "app", "imagenes")
-    UP_ARROW_ICON_PATH = os.path.join(ICON_BASE_PATH_RLW, "up_arrow.png")
-    DOWN_ARROW_ICON_PATH = os.path.join(ICON_BASE_PATH_RLW, "down_arrow.png")
+    UP_ARROW_ICON_PATH = os.path.join(ICON_BASE_PATH_RLW, "arriba.png")
+    DOWN_ARROW_ICON_PATH = os.path.join(ICON_BASE_PATH_RLW, "abajo.png")
 except NameError:
     UP_ARROW_ICON_PATH = ""
     DOWN_ARROW_ICON_PATH = ""
@@ -90,15 +90,15 @@ class ResultListWidget(QWidget):
             QListWidget {
                 background-color: transparent; /* Main list bg is transparent, items are cards */
                 border: none; /* No border for the list widget itself */
-                padding: 4px; /* Padding for the item cards to not touch edges */
-                font-size: 14px;
+                padding: 4px; /* Slightly increased padding */
+                font-size: 13.5px; /* Slightly increased font size */
                 outline: 0; /* Remove focus outline */
             }
             QListWidget::item {
                 background-color: rgba(240, 240, 245, 0.75); /* Individual item card background */
                 border: 1px solid rgba(220, 220, 225, 0.5); /* Subtle border for item card */
-                border-radius: 6px; 
-                padding: 12px 10px; /* Padding within each item card */
+                border-radius: 5px;
+                padding: 10px 8px; /* Padding within each item card */
                 margin-bottom: 4px; /* Spacing between item cards */
                 color: #2C2C2C; 
             }
@@ -107,6 +107,7 @@ class ResultListWidget(QWidget):
                 color: #111111; 
                 font-weight: bold;
                 border: 1px solid rgba(200, 200, 230, 0.85); /* Accent border for selected */
+                 /* Keep padding and margin same as normal item, or adjust as needed */
             }
             QListWidget::item:hover:!selected {
                 background-color: rgba(245, 245, 250, 0.85); /* Slightly lighter hover for item card */
@@ -123,10 +124,10 @@ class ResultListWidget(QWidget):
         self.up_button = QPushButton()
         if os.path.exists(UP_ARROW_ICON_PATH):
             self.up_button.setIcon(QIcon(UP_ARROW_ICON_PATH))
-            self.up_button.setIconSize(QSize(18,18)) # Smaller icon
+            self.up_button.setIconSize(QSize(16,16)) # Further reduced icon size
         else:
             self.up_button.setText("^")
-        self.up_button.setFixedSize(28,28) # Smaller button
+        self.up_button.setFixedSize(26,26) # Further reduced button size
         self.up_button.setStyleSheet("""
             QPushButton {
                 background-color: rgba(255, 255, 255, 0.3); /* Slightly less transparent button */
@@ -145,10 +146,10 @@ class ResultListWidget(QWidget):
         self.down_button = QPushButton()
         if os.path.exists(DOWN_ARROW_ICON_PATH):
             self.down_button.setIcon(QIcon(DOWN_ARROW_ICON_PATH))
-            self.down_button.setIconSize(QSize(18,18))
+            self.down_button.setIconSize(QSize(16,16)) # Further reduced icon size
         else:
             self.down_button.setText("v")
-        self.down_button.setFixedSize(28,28)
+        self.down_button.setFixedSize(26,26) # Further reduced button size
         self.down_button.setStyleSheet("""
             QPushButton {
                 background-color: rgba(255, 255, 255, 0.3); /* Slightly less transparent button */
