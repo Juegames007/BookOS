@@ -10,7 +10,7 @@ import os
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QFrame, QWidget, QMessageBox, QSizePolicy,
-    QSpacerItem, QGraphicsBlurEffect # Añadido QGraphicsBlurEffect
+    QSpacerItem, QGraphicsBlurEffect, QApplication # Ensure QApplication is here
 )
 from PySide6.QtGui import QFont, QPixmap, QPainter, QColor, QBrush, QMouseEvent # Añadido QMouseEvent
 from PySide6.QtCore import Qt, QPoint, Signal, QPropertyAnimation, QEasingCurve, Property, QTimer
@@ -158,18 +158,18 @@ class AddBookDialog(QDialog): #
             self._blur_effect = QGraphicsBlurEffect()
             self._blur_effect.setBlurRadius(15) # Ajusta el radio de desenfoque según sea necesario
             self._blur_effect.setEnabled(False) # Inicialmente deshabilitado
-            # Asumimos que el padre (MainWindow) tiene un widget central al que aplicar el blur
-            # Si la estructura es diferente, esto necesitará ajustarse
             if hasattr(self.parent(), 'centralWidget') and self.parent().centralWidget():
                  self.parent().centralWidget().setGraphicsEffect(self._blur_effect)
             elif hasattr(self.parent(), 'current_stacked_widget') and self.parent().current_stacked_widget: # Compatibilidad con tu posible MainApp
                  self.parent().current_stacked_widget.setGraphicsEffect(self._blur_effect)
-            else: # Fallback: aplicar al padre directamente si no se encuentra un widget central específico
-                # Esto podría no ser ideal si el padre tiene otros diálogos o elementos.
-                # self.parent().setGraphicsEffect(self._blur_effect)
+            else: 
                 print("Advertencia: No se pudo encontrar un widget central en el padre para aplicar el desenfoque.")
         
         self._setup_ui()
+        self._actualizar_estilo_guardar_button()
+        self.isbn_input.setFocus()
+        self.adjustSize()
+        self._recenter_dialog() # Ensure this is the LAST call related to init layout
 
     def _enable_blur(self, enable: bool):
         if not self.parent() or not self._blur_effect:
@@ -248,8 +248,7 @@ class AddBookDialog(QDialog): #
     def _setup_ui(self): #
         main_dialog_layout = QVBoxLayout(self)
         main_dialog_layout.setContentsMargins(10, 10, 10, 10)
-        # Align to top and horizontally center
-        main_dialog_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
+        main_dialog_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.unified_form_frame = QFrame()
         self.unified_form_frame.setObjectName("unifiedFormFrame")
@@ -345,6 +344,7 @@ class AddBookDialog(QDialog): #
             field_layout = QVBoxLayout(field_container)
             field_layout.setContentsMargins(0,0,0,0)
             field_layout.setSpacing(1) 
+            field_container.setStyleSheet("background-color: transparent;") # Set transparent background
 
             label = QLabel(label_text)
             label.setObjectName("fieldLabel")
@@ -428,22 +428,35 @@ class AddBookDialog(QDialog): #
         self.frame_layout.addWidget(self.action_buttons_container)
         self.action_buttons_container.setVisible(False)
 
-        # Remove the stretch BEFORE the frame, keep the one AFTER
-        # main_dialog_layout.addStretch(1) # Stretch ANTES del frame principal para centrar
+        # Restore the stretch BEFORE the frame
+        main_dialog_layout.addStretch(1) # Stretch ANTES del frame principal para centrar
         main_dialog_layout.addWidget(self.unified_form_frame)
         main_dialog_layout.addStretch(1) # Stretch DESPUÉS del frame principal para centrar
 
-        self._actualizar_estilo_guardar_button()
-        self.isbn_input.setFocus()
-        self.adjustSize()
+    def _recenter_dialog(self): # Ensure this method is defined
+        if self.parentWidget():
+            parent_geometry = self.parentWidget().geometry()
+            self.move(
+                parent_geometry.x() + (parent_geometry.width() - self.width()) // 2,
+                parent_geometry.y() + (parent_geometry.height() - self.height()) // 2
+            )
+        else:
+            screen = QApplication.primaryScreen()
+            if screen:
+                screen_geometry = screen.geometry()
+                self.move(
+                    (screen_geometry.width() - self.width()) // 2,
+                    (screen_geometry.height() - self.height()) // 2
+                )
 
     def _show_details_and_actions(self): #
         if self.detail_widgets_container:
             self.detail_widgets_container.setVisible(True)
         if self.action_buttons_container:
             self.action_buttons_container.setVisible(True)
-        self.setMinimumSize(480, 460) # Altura mínima reducida
+        self.setMinimumSize(480, 460) 
         self.adjustSize()
+        self._recenter_dialog() # Ensure this is after adjustSize
 
     def _actualizar_estilo_guardar_button(self): #
         if self.guardar_button.isEnabled():
@@ -520,6 +533,7 @@ class AddBookDialog(QDialog): #
         
         self.setMinimumSize(480, 280) 
         self.adjustSize() 
+        self._recenter_dialog() # Ensure this is after adjustSize
 
         self.ultimo_isbn_procesado_con_enter = None
         self.isbn_input.setFocus()
