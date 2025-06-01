@@ -584,7 +584,6 @@ class AddBookDialog(QDialog): #
         if self.advertencia_isbn_mostrada_recientemente:
             if (not isbn_actual and self.ultimo_isbn_para_advertencia == "") or \
                (isbn_actual and self.ultimo_isbn_para_advertencia is not None and isbn_actual == self.ultimo_isbn_para_advertencia):
-                if not self.detail_widgets_container.isVisible(): self._show_details_and_actions()
                 return 
 
         if not isbn_actual:
