@@ -344,7 +344,6 @@ class AddBookDialog(QDialog): #
             field_layout = QVBoxLayout(field_container)
             field_layout.setContentsMargins(0,0,0,0)
             field_layout.setSpacing(1) 
-            field_container.setStyleSheet("background-color: transparent;") # Set transparent background
 
             label = QLabel(label_text)
             label.setObjectName("fieldLabel")
