@@ -1,0 +1,23 @@
+# Archivos temporales de Python
+__pycache__/
+*.pyc
+*.pyd
+*.pyo
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+.env/
+
+# Archivos específicos de sistemas operativos
+.DS_Store # macOS
+Thumbs.db # Windows
+
+# Archivos de configuración de IDEs (opcional, pero recomendado)
+.vscode/    # VS Code
+.idea/      # PyCharm
+
+# Archivos de logs y temporales varios
+*.log
+*.swp

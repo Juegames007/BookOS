@@ -248,7 +248,8 @@ class AddBookDialog(QDialog): #
     def _setup_ui(self): #
         main_dialog_layout = QVBoxLayout(self)
         main_dialog_layout.setContentsMargins(10, 10, 10, 10)
-        main_dialog_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Align to top and horizontally center
+        main_dialog_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
 
         self.unified_form_frame = QFrame()
         self.unified_form_frame.setObjectName("unifiedFormFrame")
@@ -427,7 +428,8 @@ class AddBookDialog(QDialog): #
         self.frame_layout.addWidget(self.action_buttons_container)
         self.action_buttons_container.setVisible(False)
 
-        main_dialog_layout.addStretch(1) # Stretch ANTES del frame principal para centrar
+        # Remove the stretch BEFORE the frame, keep the one AFTER
+        # main_dialog_layout.addStretch(1) # Stretch ANTES del frame principal para centrar
         main_dialog_layout.addWidget(self.unified_form_frame)
         main_dialog_layout.addStretch(1) # Stretch DESPUÉS del frame principal para centrar
 
