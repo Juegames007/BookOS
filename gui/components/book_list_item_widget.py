@@ -27,20 +27,20 @@ class BookListItemWidget(QWidget):
         # --- Create labels for each piece of information ---
         self.title_label = QLabel(self._truncate_text(book_data.get("Título", "N/A"), 40)) # Increased truncation slightly
         self.title_label.setToolTip(book_data.get("Título", "N/A")) 
-        self.title_label.setStyleSheet("font-weight: bold; font-size: 10pt;") # Slightly smaller title for rows
+        self.title_label.setStyleSheet(f"font-weight: bold; font-size: 10pt; color : {label_text_color}") # Slightly smaller title for rows
         self.title_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         self.author_label = QLabel(self._truncate_text(book_data.get("Autor", "N/A"), 20))
         self.author_label.setToolTip(book_data.get("Autor", "N/A"))
         self.author_label.setFixedWidth(140) # Fixed width for Author
-        self.author_label.setStyleSheet("font-size: 9pt;")
+        self.author_label.setStyleSheet(f"font-size: 9pt; color : {label_text_color}")
 
         categories = book_data.get("Categorías", [])
         category_text = ", ".join(categories) if isinstance(categories, list) else "N/A"
         self.category_label = QLabel(self._truncate_text(category_text, 22))
         self.category_label.setToolTip(category_text)
         self.category_label.setFixedWidth(160) # Fixed width for Category
-        self.category_label.setStyleSheet("font-size: 9pt;")
+        self.category_label.setStyleSheet(f"font-size: 9pt; color : {label_text_color}")
         
         price_value = book_data.get('Precio')
         if price_value is not None:
@@ -51,12 +51,12 @@ class BookListItemWidget(QWidget):
         else: price_text = "N/A"
         self.price_label = QLabel(price_text)
         self.price_label.setFixedWidth(70) # Fixed width for Price
-        self.price_label.setStyleSheet("font-size: 9pt;")
+        self.price_label.setStyleSheet(f"font-size: 9pt; color : {label_text_color}")
         self.price_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter) # Align price to right
 
         self.position_label = QLabel(book_data.get("Posición", "N/A"))
         self.position_label.setFixedWidth(60) # Fixed width for Position
-        self.position_label.setStyleSheet("font-size: 9pt;")
+        self.position_label.setStyleSheet(f"font-size: 9pt; color : {label_text_color}")
         self.position_label.setAlignment(Qt.AlignmentFlag.AlignCenter) # Align position to center
 
         self.image_button = QPushButton()
