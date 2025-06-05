@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QSizePolicy
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QIcon, QDesktopServices
+from gui.common.styles import COLORS
 import os
 
 # Placeholder for icon path, adjust as needed
@@ -18,6 +19,7 @@ class BookListItemWidget(QWidget):
 
     def __init__(self, book_data: dict, parent: QWidget = None):
         super().__init__(parent)
+        label_text_color = COLORS.get('text_primary', '#202427') 
         self.book_data = book_data
 
         self.main_layout = QHBoxLayout(self)
