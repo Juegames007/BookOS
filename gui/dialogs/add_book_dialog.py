@@ -257,29 +257,30 @@ class AddBookDialog(QDialog): #
 
         self.unified_form_frame.setStyleSheet(f"""
             QFrame#unifiedFormFrame {{
-                background-color: {COLORS.get('background_light', 'rgba(255, 255, 255, 0.8)')}; /* */
-                border-radius: 18px;
-                border: 1px solid {COLORS.get('border_light', 'rgba(200, 200, 200, 0.6)')}; /* */
+                background-color: {COLORS.get('background_light', 'rgba(255, 255, 255, 0.8)')} !important; /* */
+                border-radius: 18px !important;
+                color : {label_text_color} !important;
+                border: 1px solid {COLORS.get('border_light', 'rgba(200, 200, 200, 0.6)')} !important; /* */
                 padding: 20px;
             }}
-            QLabel#dialogTitleLabel {{
-                color: {label_text_color};
-                background-color: transparent;
-                font-size: {FONTS.get('size_xlarge', 20)}px; /* */
-                font-weight: bold;
-                padding-bottom: 0px; 
+            QLabel#dialogTitleLabel {{ 
+            color: {label_text_color} !important; /* REFORZADO */
+            background: transparent !important; /* REFORZADO */
+            font-size: {FONTS.get('size_xlarge', 20)}px;
+            font-weight: bold;
+            padding-bottom: 0px; 
             }}
-            QLabel.fieldLabel {{
-                color: {label_text_color};
-                background-color: transparent;
-                font-size: {FONTS.get('size_normal', 11)}px; /* */
+            QLabel.fieldLabel {{ 
+                color: {label_text_color} !important; /* REFORZADO */
+                background: transparent !important; /* REFORZADO (o background-color) */
+                font-size: {FONTS.get('size_normal', 11)}px;
                 padding-bottom: 3px;
                 font-weight: bold;
             }}
-            QLabel#toggleLabel {{
-                color: {sub_label_text_color};
-                background-color: transparent;
-                font-size: {FONTS.get('size_small', 10)}px; /* */
+            QLabel#toggleLabel {{ 
+                color: {sub_label_text_color} !important; /* REFORZADO */
+                background: transparent !important; /* REFORZADO (o background-color) */
+                font-size: {FONTS.get('size_small', 10)}px;
             }}
             QLineEdit {{
                 background-color: rgba(255, 255, 255, 0.9);
@@ -307,6 +308,9 @@ class AddBookDialog(QDialog): #
         self.title_label_internal = QLabel("Agregar Libro")
         self.title_label_internal.setObjectName("dialogTitleLabel")
         title_toggle_row_layout.addWidget(self.title_label_internal)
+        palette = self.title_label_internal.palette()
+        palette.setColor(self.title_label_internal.foregroundRole(), QColor(COLORS.get('text_primary', '#202427')))
+        self.title_label_internal.setPalette(palette)
 
         title_toggle_row_layout.addStretch(1)
 
@@ -328,9 +332,33 @@ class AddBookDialog(QDialog): #
         
         isbn_label = QLabel("ISBN:")
         isbn_label.setObjectName("fieldLabel")
+        palette_isbn = isbn_label.palette()
+        palette_isbn.setColor(isbn_label.foregroundRole(), QColor(COLORS.get('text_primary', '#202427')))
+        isbn_label.setPalette(palette_isbn)
         self.isbn_input = QLineEdit()
         self.isbn_input.setPlaceholderText("Ingresar ISBN y presionar Enter")
         self.isbn_input.returnPressed.connect(self.buscar_isbn)
+        self.isbn_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: rgba(255, 255, 255, 0.9);
+                border: 1px solid {COLORS.get('border_medium', 'rgba(190, 190, 190, 150)')};
+                font-size: {FONTS.get('size_normal', 11)}px;
+                min-height: 36px;
+                border-radius: 6px;
+                padding-left: 8px; padding-right: 8px;
+                color: {COLORS.get('text_primary', "#1F2224")} !important; /* <--- COLOR DEL TEXTO DEL INPUT */
+            }}
+            QLineEdit::placeholder {{
+                color: {COLORS.get('text_placeholder', '#A0A0A0')}; /* <--- COLOR DEL PLACEHOLDER */
+            }}
+            QLineEdit:disabled {{
+                background-color: rgba(230, 230, 230, 0.8);
+                color: {COLORS.get('text_disabled', '#909090')};
+            }}
+            QLineEdit:focus {{
+                border: 1.5px solid {COLORS.get('border_focus', '#0078D7')};
+            }}
+        """)
         self.frame_layout.addWidget(isbn_label) # Directamente al frame_layout
         self.frame_layout.addWidget(self.isbn_input) # Directamente al frame_layout
 
@@ -347,11 +375,37 @@ class AddBookDialog(QDialog): #
 
             label = QLabel(label_text)
             label.setObjectName("fieldLabel")
+
+            palette_label = label.palette()
+            palette_label.setColor(label.foregroundRole(), QColor(COLORS.get('text_primary', '#202427')))
+            label.setPalette(palette_label)
             
             line_edit = QLineEdit()
             line_edit.setPlaceholderText(placeholder_text)
             if return_pressed_lambda:
                 line_edit.returnPressed.connect(return_pressed_lambda)
+            
+            line_edit.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: rgba(255, 255, 255, 0.9);
+                    border: 1px solid {COLORS.get('border_medium', 'rgba(190, 190, 190, 150)')};
+                    font-size: {FONTS.get('size_normal', 11)}px;
+                    min-height: 36px;
+                    border-radius: 6px;
+                    padding-left: 8px; padding-right: 8px;
+                    color: {COLORS.get('text_primary', '#202427')}; /* <--- COLOR DEL TEXTO DEL INPUT */
+                }}
+                QLineEdit::placeholder {{
+                    color: {COLORS.get('text_placeholder', '#A0A0A0')}; /* <--- COLOR DEL PLACEHOLDER */
+                }}
+                QLineEdit:disabled {{
+                    background-color: rgba(230, 230, 230, 0.8);
+                    color: {COLORS.get('text_disabled', '#909090')};
+                }}
+                QLineEdit:focus {{
+                    border: 1.5px solid {COLORS.get('border_focus', '#0078D7')};
+                }}
+            """)
             
             field_layout.addWidget(label)
             field_layout.addWidget(line_edit)
