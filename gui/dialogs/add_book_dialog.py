@@ -6,6 +6,7 @@ la cantidad de un libro existente. Permite buscar libros por ISBN utilizando
 la API integrada, y completar los datos automáticamente o manualmente.
 """
 
+import platform
 import os
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
@@ -19,6 +20,12 @@ from typing import Dict, Any, List # Añadido List
 from gui.common.styles import BACKGROUND_IMAGE_PATH, COLORS, FONTS, STYLES #
 from features.book_service import BookService #
 from core.validator import Validator #
+
+def is_kde_arch():
+    is_arch = "arch" in platform.platform().lower() or os.path.exists("/etc/arch-release")
+    is_kde = os.environ.get('DESKTOP_SESSION', '').lower() in ['plasma', 'kde'] or \
+             os.environ.get('XDG_CURRENT_DESKTOP', '').lower() in ['kde', 'plasma']
+    return is_arch and is_kde
 
 class CustomToggleSwitch(QWidget): #
     toggled = Signal(bool)
@@ -388,7 +395,7 @@ class AddBookDialog(QDialog): #
             line_edit.setStyleSheet(f"""
                 QLineEdit {{
                     background-color: rgba(255, 255, 255, 0.9);
-                    border: 1px solid {COLORS.get('border_medium', 'rgba(190, 190, 190, 150)')};
+                    border: 1px solid {COLORS.get('border_black', 'rgba(190, 190, 190, 150)')};
                     font-size: {FONTS.get('size_normal', 11)}px;
                     min-height: 36px;
                     border-radius: 6px;
@@ -529,20 +536,44 @@ class AddBookDialog(QDialog): #
             else: disabled_style += " border-radius: 6px;"
             self.guardar_button.setStyleSheet(disabled_style)
             self.guardar_button.setCursor(Qt.CursorShape.ArrowCursor)
+
+    def _nuclear_kde_fix(self):
+        """Fix nuclear para KDE que sobrescribe todo el styling"""
+        if not is_kde_arch():
+            return
             
+        # Aplicar a todos los labels de forma individual
+        labels_to_fix = [
+            self.title_label_internal,
+            self.cerrar_label_toggle,
+        ]
+        
+        # Encontrar todos los labels con clase fieldLabel
+        labels_to_fix.extend(self.findChildren(QLabel))
+        
+        for label in labels_to_fix:
+            # Aplicar múltiples estrategias
+            label.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
+            label.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+            label.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+            label.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
+            label.setAutoFillBackground(False)
+            
+            # Style agresivo que sobrescriba KDE
+            nuclear_style = f"""
+            QLabel {{
+                background-color: transparent !important;
+                background: transparent !important;
+                background-image: none !important;
+                border: 0px !important;
+                color: {COLORS.get('text_primary', '#202427')} !important;
+            }}
+            """
+            label.setStyleSheet(nuclear_style)
+
     def paintEvent(self, event): #
-        # Comentado para permitir fondo transparente y ver el efecto glassmorphism del frame interno
-        # painter = QPainter(self)
-        # if not self.background_pixmap.isNull():
-        #     scaled_pixmap = self.background_pixmap.scaled(
-        #         self.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
-        #     point = QPoint(0, 0)
-        #     if scaled_pixmap.width() > self.width(): point.setX(int((scaled_pixmap.width() - self.width()) / -2))
-        #     if scaled_pixmap.height() > self.height(): point.setY(int((scaled_pixmap.height() - self.height()) / -2))
-        #     painter.drawPixmap(point, scaled_pixmap)
-        # else: 
-        #     painter.fillRect(self.rect(), QColor(COLORS.get('background_medium', '#D1D1D1'))) #
         super().paintEvent(event) # Importante llamar al evento padre si se necesita para QDialog
+        self._nuclear_kde_fix()
 
     def _fill_form_fields(self, book_details: Dict[str, Any], make_editable: bool): #
         self.titulo_input.setText(book_details.get("Título", ""))

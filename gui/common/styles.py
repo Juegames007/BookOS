@@ -37,7 +37,8 @@ COLORS = {
     
     "border_light": "rgba(220, 220, 220, 70)",
     "border_medium": "rgba(200, 200, 200, 80)",
-    "border_focus": "#3498db"
+    "border_focus": "#3498db",
+    "border_black" : "#b7babd"
 }
 
 # --- Fuentes ---
