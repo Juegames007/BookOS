@@ -7,20 +7,23 @@ configurándolo para el modo de modificación y manejando la lógica de actualiz
 from PySide6.QtWidgets import QMessageBox
 from .book_form_dialog import BookFormDialog
 from features.book_service import BookService
-from typing import Dict
+from typing import Dict, Optional
 
 class ModifyBookDialog(BookFormDialog):
     """
     Diálogo para modificar libros, que utiliza BookFormDialog en modo 'MODIFY'.
     """
-    def __init__(self, book_service: BookService, isbn_to_modify: str, parent=None):
+    def __init__(self, book_service: BookService, isbn_to_modify: Optional[str] = None, parent=None):
         # Guarda la posición original para una actualización más precisa
         self.old_position = None
-        book_info = book_service.buscar_libro_por_isbn(isbn_to_modify)
-        if book_info and book_info.get("inventory_entries"):
-            self.old_position = book_info["inventory_entries"][0].get("posicion")
+        
+        # La lógica para obtener la posición ahora debe ser condicional
+        if isbn_to_modify:
+            book_info = book_service.buscar_libro_por_isbn(isbn_to_modify)
+            if book_info and book_info.get("inventory_entries"):
+                self.old_position = book_info["inventory_entries"][0].get("posicion")
 
-        # Inicializa el formulario base en modo "Modificar" y carga el ISBN
+        # Inicializa el formulario base en modo "Modificar" y carga el ISBN si se proporcionó
         super().__init__(book_service, mode='MODIFY', initial_isbn=isbn_to_modify, parent=parent)
         
         # Conecta la señal genérica de guardado a la función específica de este diálogo

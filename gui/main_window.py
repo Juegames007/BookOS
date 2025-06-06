@@ -40,16 +40,10 @@ def accion_pendiente(nombre_accion, parent_window=None):
         dialog.exec()
         
     elif accion_limpia == "Modificar Libro":
-        isbn, ok = QInputDialog.getText(parent_window, "Modificar Libro", "Ingrese el ISBN del libro a modificar:")
-        if ok and isbn:
-            dialog = ModifyBookDialog(actual_book_service, isbn, parent_window)
-            dialog.exec()
-        elif ok:
-            QMessageBox.warning(parent_window, "Entrada no Válida", "Debe ingresar un ISBN.")
-            
-    else:
-        QMessageBox.information(parent_window, "Acción Pendiente",
-                              f"La funcionalidad '{nombre_accion}' está pendiente de implementación.")
+        # Ahora creamos y mostramos el diálogo de modificar directamente.
+        # El propio diálogo se encargará de la lógica de pedir el ISBN.
+        dialog = ModifyBookDialog(actual_book_service, parent=parent_window)
+        dialog.exec()
 
 class VentanaGestionLibreria(QMainWindow):
     """
