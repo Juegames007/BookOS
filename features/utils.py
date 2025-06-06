@@ -1,3 +1,5 @@
+import unicodedata
+
 def format_price_with_thousands_separator(price_val: any) -> str:
     """Formatea un valor numérico (entero) con separadores de miles.
     Ejemplo: 10000 -> "10.000"
@@ -30,3 +32,15 @@ def format_price_with_thousands_separator(price_val: any) -> str:
     except (ValueError, TypeError):
         # En caso de cualquier error de conversión o tipo, devolver el valor original como cadena
         return str(price_val)
+
+def normalize_for_search(text: str) -> str:
+    """
+    Normaliza un texto para búsquedas: lo convierte a minúsculas y elimina tildes.
+    Ej: "Arcángeles" -> "arcangeles"
+    """
+    if not isinstance(text, str):
+        return ""
+    # NFD (Normalization Form D) descompone los caracteres en su base + acentos
+    nfkd_form = unicodedata.normalize('NFD', text.lower())
+    # Se eliminan los caracteres que son acentos (combinados)
+    return "".join([c for c in nfkd_form if not unicodedata.combining(c)])

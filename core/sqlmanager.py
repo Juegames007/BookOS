@@ -3,6 +3,8 @@ import pandas as pd
 from typing import List, Optional, Any, Dict
 from .interfaces import DataManagerInterface
 import os # Para construir la ruta a la base de datos
+from features.utils import normalize_for_search
+
 
 class SQLManager(DataManagerInterface):
     def __init__(self, db_name="library_app.db", db_path: Optional[str] = None):
@@ -31,6 +33,8 @@ class SQLManager(DataManagerInterface):
             conn = sqlite3.connect(self.db_path)
             # Habilitar claves foráneas (buena práctica)
             conn.execute("PRAGMA foreign_keys = ON;")
+            conn.create_function("normalize", 1, normalize_for_search)
+
             return conn
         except sqlite3.Error as e:
             print(f"Error al conectar con la base de datos SQLite '{self.db_path}': {e}")

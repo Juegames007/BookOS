@@ -9,6 +9,8 @@ modificar y eliminar libros, así como para gestionar el inventario.
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 from core.interfaces import DataManagerInterface
+from .utils import normalize_for_search
+
 
 class BookService:
     """
@@ -137,11 +139,15 @@ class BookService:
         query = """
             SELECT l.isbn, l.titulo, l.autor, l.editorial, l.imagen_url, l.categorias, l.precio_venta, i.posicion, i.cantidad
             FROM libros l LEFT JOIN inventario i ON l.isbn = i.libro_isbn
-            WHERE l.titulo LIKE ? OR l.autor LIKE ? OR l.editorial LIKE ? OR l.isbn LIKE ?
+            WHERE normalize(l.titulo) LIKE ? OR normalize(l.autor) LIKE ? OR normalize(l.editorial) LIKE ? OR l.isbn LIKE ?
             ORDER BY l.titulo
         """
-        search_term = f"%{termino}%"
-        params = (search_term, search_term, search_term, search_term)
+        # Normalizamos el término de búsqueda del usuario ANTES de pasarlo a la consulta
+        normalized_search_term = f"%{normalize_for_search(termino)}%"
+        # El ISBN no necesita normalización, así que lo mantenemos separado
+        isbn_search_term = f"%{termino}%"
+        params = (normalized_search_term, normalized_search_term, normalized_search_term, isbn_search_term)
+        
         results = self.data_manager.fetch_query(query, params)
         
         books = []
