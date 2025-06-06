@@ -94,6 +94,8 @@ class BookFormDialog(QDialog):
         self.title_bar_height = 50
         self.ultimo_isbn_procesado_con_enter = None
         self.ultima_posicion_ingresada = None
+
+        self.original_book_data: Optional[Dict[str, Any]] = None # Para guardar los datos originales
         
         self.detail_widgets_container = None
         self.action_buttons_container = None
@@ -301,6 +303,14 @@ class BookFormDialog(QDialog):
         search_result = self.book_service.buscar_libro_por_isbn(isbn)
         status = search_result["status"]
         book_details = search_result.get("book_details")
+
+        if status in ["encontrado_completo", "encontrado_en_libros"]:
+            # Guardamos los detalles originales solo cuando el libro existe en nuestra BD
+            self.original_book_data = book_details 
+        else:
+            # Si es un libro nuevo de la API o no encontrado, no hay datos originales
+            self.original_book_data = None
+            
         if self.mode == 'MODIFY' and status in ['no_encontrado', 'solo_api']:
             QMessageBox.critical(self, "Error", f"El libro con ISBN '{isbn}' debe existir en la base de datos local para poder modificarlo.")
             self._reset_for_next_book()
