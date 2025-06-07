@@ -1,3 +1,5 @@
+# ARCHIVO MODIFICADO: juegames007/bookos/BookOS-e73bc84f0a94b0c519fddbb143bbf5041f6aa9c0/gui/main_window.py
+
 """
 Ventana principal de la aplicación.
 
@@ -19,7 +21,8 @@ from app.dependencies import DependencyFactory
 from gui.common.widgets import CustomButton
 from gui.common.styles import BACKGROUND_IMAGE_PATH, FONTS
 from gui.dialogs.add_book_dialog import AddBookDialog
-from gui.dialogs.modify_book_dialog import ModifyBookDialog # Importar el nuevo diálogo
+from gui.dialogs.modify_book_dialog import ModifyBookDialog
+from gui.dialogs.reservation_dialog import ReservationDialog # <-- AÑADIR ESTA LÍNEA
 from gui.components.menu_section_widget import MenuSectionWidget
 from features.book_service import BookService
 from gui.dialogs.search_results_window import SearchResultsWindow
@@ -40,10 +43,14 @@ def accion_pendiente(nombre_accion, parent_window=None):
         dialog.exec()
         
     elif accion_limpia == "Modificar Libro":
-        # Ahora creamos y mostramos el diálogo de modificar directamente.
-        # El propio diálogo se encargará de la lógica de pedir el ISBN.
         dialog = ModifyBookDialog(actual_book_service, parent=parent_window)
         dialog.exec()
+    
+    # --- INICIO DE LA MODIFICACIÓN ---
+    elif accion_limpia == "Apartar / Ver":
+        dialog = ReservationDialog(parent=parent_window)
+        dialog.exec()
+    # --- FIN DE LA MODIFICACIÓN ---
 
 class VentanaGestionLibreria(QMainWindow):
     """
