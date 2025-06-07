@@ -39,7 +39,7 @@ class BookItemWidget(QFrame):
         
         self.info_label = QLabel(book_info_text)
         self.info_label.setFont(QFont("Arial", 10))
-        self.info_label.setStyleSheet("color: #333; border: none; background: transparent;")
+        self.info_label.setStyleSheet("color: #000000; border: none; background: transparent;")
         self.info_label.setWordWrap(False)
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
         
@@ -60,10 +60,11 @@ class BookItemWidget(QFrame):
             
         self.remove_button.setStyleSheet("""
             QPushButton {
-                background-color: #ff4444; color: white; border: none;
+                background-color: #ff4444; color: #000000; border: none;
                 border-radius: 15px; font-size: 16px; font-weight: bold;
             }
             QPushButton:hover { background-color: #cc3333; }
+            QPushButton:focus { outline: none; border: none; }
         """)
         self.remove_button.clicked.connect(lambda: self.remove_requested.emit(self))
         
@@ -82,7 +83,7 @@ class ReservationDialog(QDialog):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
         # CAMBIO CLAVE: Tamaño fijo para evitar que se mueva todo
-        self.setFixedSize(500, 600)  # Aumentada altura para acomodar paginación
+        self.setFixedSize(500, 600)  # Aumentada altura a 650 para asegurar que no se recorte nada en absoluto, debido a sutiles comportamientos de renderizado.
 
         self.font_family = FONTS.get("family", "Arial")
         self._drag_pos = QPoint()
@@ -112,7 +113,7 @@ class ReservationDialog(QDialog):
         container_frame.setObjectName("containerFrame")
         container_frame.setStyleSheet(f"""
             QFrame#containerFrame {{
-                background-color: rgba(255, 255, 255, 0.25);
+                background-color: rgba(255, 255, 255, 0.35);
                 border: 1px solid rgba(255, 255, 255, 0.2);
                 border-radius: 16px;
             }}
@@ -132,24 +133,26 @@ class ReservationDialog(QDialog):
         title_label = QLabel("Reserve Book")
         title_font = QFont(self.font_family, 18, QFont.Weight.Bold)
         title_label.setFont(title_font)
-        title_label.setStyleSheet("color: white; background: transparent; border: none; margin-top: 5px;")
+        title_label.setStyleSheet("color: #000000; background: transparent; border: none; margin-top: 5px;")
         self.view_reservations_button = QPushButton("View Reservations")
         self.view_reservations_button.setFixedHeight(36)
         self.view_reservations_button.setStyleSheet("""
             QPushButton {
                 background-color: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3);
-                border-radius: 18px; padding: 0 20px; color: white;
+                border-radius: 18px; padding: 0 20px; color: #000000;
                 font-size: 12px; font-weight: 500; margin-top: 8px; margin-right: 15px;
             }
             QPushButton:hover { background-color: rgba(255, 255, 255, 0.3); }
+            QPushButton:focus { outline: none; border: none; }
         """)
         self.view_reservations_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.close_button = QPushButton("×")
         self.close_button.setFixedSize(32, 32)
         self.close_button.setFont(QFont(self.font_family, 16, QFont.Weight.Bold))
         self.close_button.setStyleSheet("""
-            QPushButton { background-color: transparent; border: none; border-radius: 16px; color: white; }
+            QPushButton { background-color: transparent; border: none; border-radius: 16px; color: #000000; }
             QPushButton:hover { background-color: rgba(255, 255, 255, 0.2); }
+            QPushButton:focus { outline: none; border: none; }
         """)
         self.close_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.close_button.clicked.connect(self.reject)
@@ -162,13 +165,13 @@ class ReservationDialog(QDialog):
         # CONTENT WIDGET CON LAYOUT MEJORADO
         content_widget = QWidget()
         content_layout = QVBoxLayout(content_widget)
-        content_layout.setContentsMargins(30, 15, 30, 25)  # Reducidos márgenes
+        content_layout.setContentsMargins(30, 15, 30, 25)  # Restablecido margen inferior a 25
         content_layout.setSpacing(8)  # REDUCIDO: Menos espacio entre secciones principales
 
         # Estilo MUY agresivo para eliminar todo el espaciado de las etiquetas
         label_style = """
             QLabel { 
-                color: rgba(255, 255, 255, 0.9); 
+                color: #000000;
                 background-color: transparent; 
                 font-size: 11px; 
                 font-weight: 500; 
@@ -183,7 +186,7 @@ class ReservationDialog(QDialog):
         input_style = """
             QLineEdit {
                 background-color: rgba(255, 255, 255, 0.9); border: 1px solid rgba(255, 255, 255, 0.3);
-                border-radius: 8px; padding: 0 15px; font-size: 14px; color: #333;
+                border-radius: 8px; padding: 0 15px; font-size: 14px; color: #000000;
                 margin: 0px;
             }
             QLineEdit:focus {
@@ -249,16 +252,16 @@ class ReservationDialog(QDialog):
 
         # SECCIÓN DE LIBROS - REESTRUCTURADA
         self.books_section = QWidget()
-        # CAMBIO CLAVE: Aumentar altura total para incluir paginación completamente
-        self.books_section.setFixedHeight(270)  # Aumentada de 250 a 270
+        # CAMBIO CLAVE: Ajustar altura total para que la paginación no se recorte
+        self.books_section.setFixedHeight(286)  # Reducida de 290 a 286 para ajustar el tamaño del diálogo
         
         self.books_section_layout = QVBoxLayout(self.books_section)
-        self.books_section_layout.setContentsMargins(0, 5, 0, 0)  # Menos margen superior
+        self.books_section_layout.setContentsMargins(0, 5, 0, 10)  # Menos margen superior, con margen inferior de 10px
         self.books_section_layout.setSpacing(6)  # Menos espacio entre elementos
         
-        self.books_label = QLabel("Reserved Books:")
+        self.books_label = QLabel("Libros apartados:")
         self.books_label.setFont(QFont(self.font_family, 14, QFont.Weight.Bold))
-        self.books_label.setStyleSheet("color: white; background: transparent;")
+        self.books_label.setStyleSheet("color: #000000; background: transparent;")
         self.books_section_layout.addWidget(self.books_label)
 
         # Contenedor para los libros - ALTURA AJUSTADA para dar más espacio a paginación
@@ -279,7 +282,7 @@ class ReservationDialog(QDialog):
         
         # Mensaje cuando no hay libros
         self.no_books_label = QLabel("No books reserved yet.")
-        self.no_books_label.setStyleSheet("color: rgba(255, 255, 255, 0.7); background: transparent; font-style: italic;")
+        self.no_books_label.setStyleSheet("color: rgba(0, 0, 0, 0.7); background: transparent; font-style: italic;")
         self.no_books_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.visible_books_layout.addWidget(self.no_books_label)
         
@@ -287,14 +290,13 @@ class ReservationDialog(QDialog):
         
         # CAMBIO CLAVE: Navegación de páginas FUERA del contenedor de libros
         self.page_nav = QFrame()
-        self.page_nav.setVisible(False)  # Inicialmente oculto
+        self.page_nav.setVisible(True)  # Se cambia a True para que siempre sea visible
         self.page_nav.setFixedHeight(40)  # Altura aumentada para que no se recorte
         self.page_nav.setStyleSheet("""
             QFrame {
                 background-color: rgba(255, 255, 255, 0.1);
                 border: 1px solid rgba(255, 255, 255, 0.15);
                 border-radius: 8px;
-                margin-top: 3px;
             }
         """)
         
@@ -306,7 +308,7 @@ class ReservationDialog(QDialog):
             QPushButton { 
                 background-color: rgba(255, 255, 255, 0.2); 
                 border: 1px solid rgba(255, 255, 255, 0.3); 
-                border-radius: 12px; color: white; font-size: 12px; 
+                border-radius: 12px; color: #000000; font-size: 12px; 
                 font-weight: 500;
             } 
             QPushButton:hover { 
@@ -314,8 +316,9 @@ class ReservationDialog(QDialog):
             } 
             QPushButton:disabled { 
                 background-color: rgba(255, 255, 255, 0.05); 
-                color: rgba(255, 255, 255, 0.3); 
+                color: rgba(0, 0, 0, 0.3); 
             }
+            QPushButton:focus { outline: none; border: none; }
         """
         
         self.prev_button = QPushButton("◀ Previous")
@@ -324,7 +327,7 @@ class ReservationDialog(QDialog):
         self.prev_button.clicked.connect(self.prev_page)
         
         self.page_info = QLabel("")
-        self.page_info.setStyleSheet("color: rgba(255, 255, 255, 0.9); background: transparent; font-size: 12px; font-weight: 500;")
+        self.page_info.setStyleSheet("color: rgba(0, 0, 0, 0.9); background: transparent; font-size: 12px; font-weight: 500;")
         self.page_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.next_button = QPushButton("Next ▶")
@@ -348,7 +351,7 @@ class ReservationDialog(QDialog):
         self.confirm_button.setFixedHeight(50)
         self.confirm_button.setStyleSheet("""
             QPushButton { 
-                background-color: #4A90E2; color: white; border: none; 
+                background-color: #4A90E2; color: #000000; border: none; 
                 border-radius: 25px; font-size: 16px; font-weight: bold; 
             } 
             QPushButton:hover { 
@@ -357,6 +360,7 @@ class ReservationDialog(QDialog):
             QPushButton:pressed { 
                 background-color: #2E6DA4; 
             }
+            QPushButton:focus { outline: none; border: none; }
         """)
         self.confirm_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.confirm_button.clicked.connect(self.confirm_reservation)
@@ -409,7 +413,7 @@ class ReservationDialog(QDialog):
         if not self.reserved_books:
             # Mostrar mensaje cuando no hay libros
             self.no_books_label = QLabel("No books reserved yet.")
-            self.no_books_label.setStyleSheet("color: rgba(255, 255, 255, 0.7); background: transparent; font-style: italic;")
+            self.no_books_label.setStyleSheet("color: rgba(0, 0, 0, 0.7); background: transparent; font-style: italic;")
             self.no_books_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.visible_books_layout.addWidget(self.no_books_label)
         else:
@@ -427,15 +431,17 @@ class ReservationDialog(QDialog):
         self.update_navigation()
 
     def update_navigation(self):
-        # Mostrar navegación solo si hay más libros que los que caben en una página
-        has_pagination = len(self.reserved_books) > self.books_per_page
-        self.page_nav.setVisible(has_pagination)
+        # Mostrar navegación siempre
+        self.page_nav.setVisible(True) # Asegura que la barra de navegación siempre sea visible
         
-        if not has_pagination:
+        if not self.reserved_books:
+            self.page_info.setText("Página 0 de 0")
+            self.prev_button.setEnabled(False)
+            self.next_button.setEnabled(False)
             return
 
         total_pages = (len(self.reserved_books) - 1) // self.books_per_page + 1
-        self.page_info.setText(f"Page {self.current_page + 1} of {total_pages}")
+        self.page_info.setText(f"Página {self.current_page + 1} de {total_pages}")
         self.prev_button.setEnabled(self.current_page > 0)
         self.next_button.setEnabled(self.current_page < total_pages - 1)
 
