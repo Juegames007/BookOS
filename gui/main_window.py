@@ -22,9 +22,11 @@ from gui.common.widgets import CustomButton
 from gui.common.styles import BACKGROUND_IMAGE_PATH, FONTS
 from gui.dialogs.add_book_dialog import AddBookDialog
 from gui.dialogs.modify_book_dialog import ModifyBookDialog
-from gui.dialogs.reservation_dialog import ReservationDialog # <-- AÑADIR ESTA LÍNEA
+from gui.dialogs.reservation_dialog import ReservationDialog
+from gui.dialogs.reservation_options_dialog import ReservationOptionsDialog
 from gui.components.menu_section_widget import MenuSectionWidget
 from features.book_service import BookService
+from features.reservation_service import ReservationService
 from gui.dialogs.search_results_window import SearchResultsWindow
 
 def accion_pendiente(nombre_accion, parent_window=None):
@@ -34,6 +36,7 @@ def accion_pendiente(nombre_accion, parent_window=None):
     data_manager = DependencyFactory.get_data_manager()
     book_info_fetcher = DependencyFactory.get_book_info_service()
     actual_book_service = BookService(data_manager, book_info_fetcher)
+    reservation_service = ReservationService(data_manager)
     
     accion_limpia = nombre_accion.strip()
 
@@ -48,9 +51,18 @@ def accion_pendiente(nombre_accion, parent_window=None):
     
     # --- INICIO DE LA MODIFICACIÓN ---
     elif accion_limpia == "Apartar / Ver":
-        dialog = ReservationDialog(parent=parent_window)
-        dialog.exec()
+        options_dialog = ReservationOptionsDialog(parent=parent_window)
+        options_dialog.create_new_requested.connect(
+            lambda: open_reservation_dialog(reservation_service, parent_window)
+        )
+        # Aquí conectarías la señal view_existing_requested a la futura ventana
+        # options_dialog.view_existing_requested.connect(...)
+        options_dialog.exec()
     # --- FIN DE LA MODIFICACIÓN ---
+
+def open_reservation_dialog(reservation_service, parent_window):
+    dialog = ReservationDialog(reservation_service, parent=parent_window)
+    dialog.exec()
 
 class VentanaGestionLibreria(QMainWindow):
     """

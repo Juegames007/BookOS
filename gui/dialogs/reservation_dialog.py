@@ -2,26 +2,68 @@ import os
 from PySide6.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QFrame, QGraphicsBlurEffect, QLineEdit, QScrollArea, QSpacerItem,
-    QSizePolicy, QApplication
+    QSizePolicy, QApplication, QMessageBox, QInputDialog, QComboBox, QGridLayout, QAbstractButton,
+    QGroupBox, QTextEdit
 )
-from PySide6.QtGui import QFont, QMouseEvent, QPixmap, QPainter, QColor, QIcon
-from PySide6.QtCore import Qt, QPoint, Signal
+from PySide6.QtGui import QFont, QMouseEvent, QPixmap, QPainter, QColor, QIcon, QIntValidator, QFontMetrics
+from PySide6.QtCore import Qt, QPoint, Signal, QSize
+import uuid
 
 # Asumiendo que los estilos y dependencias están accesibles
 from gui.common.styles import FONTS, COLORS
+from features.reservation_service import ReservationService
+from features.utils import format_price_with_thousands_separator
+
+class ToggleSwitch(QAbstractButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setChecked(False)
+        self.setFixedSize(44, 24)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        padding = 2
+        handle_radius = (self.height() / 2) - padding
+        
+        if self.isEnabled():
+            bg_color = QColor("#4A90E2") if self.isChecked() else QColor("#BDBDBD")
+        else:
+            bg_color = QColor("#E0E0E0")
+        
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(bg_color)
+        painter.drawRoundedRect(0, 0, self.width(), self.height(), self.height() / 2, self.height() / 2)
+
+        handle_color = QColor("#FFFFFF") if self.isEnabled() else QColor("#BDBDBD")
+        painter.setBrush(handle_color)
+        
+        handle_x = self.width() - (handle_radius * 2) - padding if self.isChecked() else padding
+            
+        painter.drawEllipse(handle_x, padding, handle_radius * 2, handle_radius * 2)
+
+class ElidedLabel(QLabel):
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        metrics = QFontMetrics(self.font())
+        elided_text = metrics.elidedText(self.text(), Qt.TextElideMode.ElideRight, self.width())
+        painter.drawText(self.rect(), int(self.alignment()), elided_text)
 
 class BookItemWidget(QFrame):
     """Widget individual para cada libro en la reserva"""
     remove_requested = Signal(object)
     
-    def __init__(self, isbn="", title="", parent=None):
+    def __init__(self, book_data: dict, count: int, parent=None):
         super().__init__(parent)
-        self.isbn = isbn
-        self.title = title
+        self.book_data = book_data
+        self.count = count
         self.setup_ui()
     
     def setup_ui(self):
-        self.setFixedHeight(45)  # Altura reducida de 50 a 40
+        self.setFixedHeight(45)
         self.setFrameStyle(QFrame.Shape.Box)
         self.setStyleSheet("""
             QFrame {
@@ -32,22 +74,27 @@ class BookItemWidget(QFrame):
         """)
         
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 0, 8, 0)  # Márgenes más pequeños
-        layout.setSpacing(8)  # Menos espacio entre elementos
+        layout.setContentsMargins(12, 0, 8, 0)
+        layout.setSpacing(8)
         
-        book_info_text = f"{self.title if self.title else 'Libro sin título'} - ISBN: {self.isbn}"
-        
-        self.info_label = QLabel(book_info_text)
+        if 'titulo' in self.book_data:
+            info = f"{self.book_data['titulo']} (Pos: {self.book_data.get('posicion', 'N/A')})"
+        else:
+            info = self.book_data.get('descripcion', 'Item')
+
+        count_str = f" (x{self.count})" if self.count > 1 else ""
+        book_info_text = f"{info}{count_str} - ${self.book_data.get('precio_venta', 0):,}"
+
+        self.info_label = ElidedLabel(book_info_text)
         self.info_label.setFont(QFont("Arial", 10))
         self.info_label.setStyleSheet("color: #000000; border: none; background: transparent;")
         self.info_label.setWordWrap(False)
-        self.info_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+        self.info_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
         
         self.remove_button = QPushButton()
         self.remove_button.setFixedSize(20, 20)
         
         try:
-            # Asegúrate que esta ruta es correcta desde donde ejecutas el programa
             icon_path = "gui/dialogs/icono_eliminar.png" 
             icon_pixmap = QPixmap(icon_path)
             if not icon_pixmap.isNull():
@@ -61,36 +108,34 @@ class BookItemWidget(QFrame):
         self.remove_button.setStyleSheet("""
             QPushButton {
                 background-color: #ff4444; color: #000000; border: none;
-                border-radius: 15px; font-size: 16px; font-weight: bold;
+                border-radius: 10px; font-size: 14px; font-weight: bold;
             }
             QPushButton:hover { background-color: #cc3333; }
-            QPushButton:focus { outline: none; border: none; }
         """)
-        self.remove_button.clicked.connect(lambda: self.remove_requested.emit(self))
+        self.remove_button.clicked.connect(lambda: self.remove_requested.emit(self.book_data['id_inventario']))
         
-        layout.addWidget(self.info_label)
-        layout.addStretch()
+        layout.addWidget(self.info_label, 1)
         layout.addWidget(self.remove_button)
 
 class ReservationDialog(QDialog):
     """
     Diálogo moderno para gestionar la reserva y visualización de libros apartados.
     """
-    def __init__(self, parent=None):
+    def __init__(self, reservation_service: ReservationService, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Reservas")
+        self.reservation_service = reservation_service
+        self.setWindowTitle("Nueva Reserva o Venta")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
-        # CAMBIO CLAVE: Tamaño fijo para evitar que se mueva todo
-        self.setFixedSize(500, 600)  # Aumentada altura a 650 para asegurar que no se recorte nada en absoluto, debido a sutiles comportamientos de renderizado.
+        self.setMinimumSize(770, 630)
 
         self.font_family = FONTS.get("family", "Arial")
         self._drag_pos = QPoint()
         self.top_bar_height = 50
-        self.reserved_books = []
+        self.reserved_items = []
         self.current_page = 0
-        self.books_per_page = 3
+        self.items_per_page = 4 # Ajustado a la nueva altura
 
         self._blur_effect = None
         if self.parent():
@@ -101,8 +146,9 @@ class ReservationDialog(QDialog):
             if target_widget:
                 target_widget.setGraphicsEffect(self._blur_effect)
 
-        self._setup_ui()
         self.setModal(True)
+
+        self._setup_ui()
 
     def _setup_ui(self):
         main_layout = QVBoxLayout(self)
@@ -124,28 +170,20 @@ class ReservationDialog(QDialog):
         container_layout.setContentsMargins(0, 0, 0, 0)
         container_layout.setSpacing(0)
 
+        container_layout.addSpacing(15) # Espacio añadido ANTES de la barra superior
+
         # TOP BAR - FIJO
         top_bar = QFrame()
         top_bar.setFixedHeight(self.top_bar_height)
         top_bar.setStyleSheet("background-color: transparent;")
         top_bar_layout = QHBoxLayout(top_bar)
-        top_bar_layout.setContentsMargins(30, 10, 25, 0)
-        title_label = QLabel("Reserve Book")
-        title_font = QFont(self.font_family, 18, QFont.Weight.Bold)
+        top_bar_layout.setContentsMargins(30, 10, 25, 0) # Margen revertido a un valor seguro
+        
+        title_label = QLabel("Reserve Books / Disks") #NO MODIFICAR
+        title_font = QFont("Montserrat", 22, QFont.Weight.Bold)
         title_label.setFont(title_font)
         title_label.setStyleSheet("color: #000000; background: transparent; border: none; margin-top: 5px;")
-        self.view_reservations_button = QPushButton("View Reservations")
-        self.view_reservations_button.setFixedHeight(36)
-        self.view_reservations_button.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.3);
-                border-radius: 18px; padding: 0 20px; color: #000000;
-                font-size: 12px; font-weight: 500; margin-top: 8px; margin-right: 15px;
-            }
-            QPushButton:hover { background-color: rgba(255, 255, 255, 0.3); }
-            QPushButton:focus { outline: none; border: none; }
-        """)
-        self.view_reservations_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        
         self.close_button = QPushButton("×")
         self.close_button.setFixedSize(32, 32)
         self.close_button.setFont(QFont(self.font_family, 16, QFont.Weight.Bold))
@@ -156,173 +194,288 @@ class ReservationDialog(QDialog):
         """)
         self.close_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.close_button.clicked.connect(self.reject)
+
         top_bar_layout.addWidget(title_label)
         top_bar_layout.addStretch()
-        top_bar_layout.addWidget(self.view_reservations_button)
         top_bar_layout.addWidget(self.close_button)
         container_layout.addWidget(top_bar)
 
-        # CONTENT WIDGET CON LAYOUT MEJORADO
-        content_widget = QWidget()
-        content_layout = QVBoxLayout(content_widget)
-        content_layout.setContentsMargins(30, 15, 30, 25)  # Restablecido margen inferior a 25
-        content_layout.setSpacing(8)  # REDUCIDO: Menos espacio entre secciones principales
+        container_layout.addSpacing(15) # Espacio existente debajo de la barra superior
 
-        # Estilo MUY agresivo para eliminar todo el espaciado de las etiquetas
-        label_style = """
-            QLabel { 
-                color: #000000;
-                background-color: transparent; 
-                font-size: 11px; 
-                font-weight: 500; 
-                margin: 0px; 
-                padding: 0px;
-                border: 0px;
-                min-height: 0px;
-                max-height: 15px;
+        # --- CONTENIDO PRINCIPAL ---
+        content_widget = QWidget()
+        content_layout = QHBoxLayout(content_widget)
+        content_layout.setContentsMargins(20, 0, 20, 10)
+        content_layout.setSpacing(20)
+
+        # --- COLUMNA IZQUIERDA (CLIENTE, PAGO, NOTAS) ---
+        left_column = QWidget()
+        left_column.setMinimumWidth(280)
+        left_column_layout = QVBoxLayout(left_column)
+        left_column_layout.setContentsMargins(0, 0, 0, 0)
+        left_column_layout.setSpacing(0)
+
+        title_label_style = """
+            QLabel {
+                font-family: 'Arial';
+                font-size: 13px;
+                font-weight: bold;
+                color: #333;
+                background-color: transparent;
+                padding-left: 2px;
             }
         """
-        
+
+        content_frame_style = """
+            QFrame {
+                border: 1px solid rgba(0, 0, 0, 0.1);
+                border-radius: 8px;
+                background-color: rgba(255, 255, 255, 0.2);
+            }
+        """
+
         input_style = """
             QLineEdit {
-                background-color: rgba(255, 255, 255, 0.9); border: 1px solid rgba(255, 255, 255, 0.3);
-                border-radius: 8px; padding: 0 15px; font-size: 14px; color: #000000;
-                margin: 0px;
+                background-color: rgba(255, 255, 255, 0.55); border: 1px solid rgba(0, 0, 0, 0.15);
+                border-radius: 8px; padding: 0 15px; font-size: 14px; color: #000000; margin: 0px;
             }
             QLineEdit:focus {
-                border: 2px solid rgba(74, 144, 226, 0.8); background-color: rgba(255, 255, 255, 0.95);
+                border: 1px solid rgba(74, 144, 226, 0.8);
             }
         """
-        
-        # SECCIÓN DE INPUTS CLIENTE - ULTRA OPTIMIZADA
-        client_info_layout = QHBoxLayout()
-        client_info_layout.setSpacing(15)
-        client_info_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Layout nombre - SIN ESPACIO
-        name_layout = QVBoxLayout()
-        name_layout.setSpacing(0)  # CERO espaciado
-        name_layout.setContentsMargins(0, 0, 0, 0)
-        client_name_label = QLabel("Nombre cliente")
-        client_name_label.setStyleSheet(label_style)
-        client_name_label.setFixedHeight(15)  # Altura fija muy pequeña
+
+        # 1. Datos del Cliente
+        client_title = QLabel("Datos del Cliente")
+        client_title.setStyleSheet(title_label_style)
+
+        client_frame = QFrame()
+        client_frame.setStyleSheet(content_frame_style)
+        client_layout = QVBoxLayout(client_frame)
+        client_layout.setSpacing(10)
+        client_layout.setContentsMargins(15, 15, 15, 15)
+
         self.client_name_input = QLineEdit()
-        self.client_name_input.setPlaceholderText("Nombre completo")
-        self.client_name_input.setFixedHeight(45)
+        self.client_name_input.setPlaceholderText("Nombre del cliente")
+        self.client_name_input.setFixedHeight(36)
         self.client_name_input.setStyleSheet(input_style)
-        name_layout.addWidget(client_name_label)
-        name_layout.addWidget(self.client_name_input)
         
-        # Layout teléfono - SIN ESPACIO
-        phone_layout = QVBoxLayout()
-        phone_layout.setSpacing(0)  # CERO espaciado
-        phone_layout.setContentsMargins(0, 0, 0, 0)
-        client_phone_label = QLabel("Teléfono cliente")
-        client_phone_label.setStyleSheet(label_style)
-        client_phone_label.setFixedHeight(15)  # Altura fija muy pequeña
         self.client_phone_input = QLineEdit()
         self.client_phone_input.setPlaceholderText("Número de contacto")
-        self.client_phone_input.setFixedHeight(45)
+        self.client_phone_input.setFixedHeight(36)
         self.client_phone_input.setStyleSheet(input_style)
-        phone_layout.addWidget(client_phone_label)
-        phone_layout.addWidget(self.client_phone_input)
         
-        client_info_layout.addLayout(name_layout)
-        client_info_layout.addLayout(phone_layout)
-        content_layout.addLayout(client_info_layout)
-        
-        # SEPARADOR VISUAL entre secciones de cliente e ISBN
-        content_layout.addSpacing(2)  # Espaciado específico para separar secciones
-        
-        # SECCIÓN ISBN - ULTRA OPTIMIZADA
-        isbn_layout = QVBoxLayout()
-        isbn_layout.setSpacing(0)  # CERO espaciado
-        isbn_layout.setContentsMargins(0, 0, 0, 0)
-        isbn_label = QLabel("ISBN libro a reservar")
-        isbn_label.setStyleSheet(label_style)
-        isbn_label.setFixedHeight(15)  # Altura fija muy pequeña
-        self.isbn_input = QLineEdit()
-        self.isbn_input.setPlaceholderText("Ingresa el ISBN y presiona Enter")
-        self.isbn_input.setFixedHeight(45)
-        self.isbn_input.setStyleSheet(input_style)
-        self.isbn_input.returnPressed.connect(self.add_book_by_isbn)
-        isbn_layout.addWidget(isbn_label)
-        isbn_layout.addWidget(self.isbn_input)
-        content_layout.addLayout(isbn_layout)
+        client_layout.addWidget(self.client_name_input)
+        client_layout.addWidget(self.client_phone_input)
 
-        # SECCIÓN DE LIBROS - REESTRUCTURADA
-        self.books_section = QWidget()
-        # CAMBIO CLAVE: Ajustar altura total para que la paginación no se recorte
-        self.books_section.setFixedHeight(286)  # Reducida de 290 a 286 para ajustar el tamaño del diálogo
-        
-        self.books_section_layout = QVBoxLayout(self.books_section)
-        self.books_section_layout.setContentsMargins(0, 5, 0, 10)  # Menos margen superior, con margen inferior de 10px
-        self.books_section_layout.setSpacing(6)  # Menos espacio entre elementos
-        
-        self.books_label = QLabel("Libros apartados:")
-        self.books_label.setFont(QFont(self.font_family, 14, QFont.Weight.Bold))
-        self.books_label.setStyleSheet("color: #000000; background: transparent;")
-        self.books_section_layout.addWidget(self.books_label)
+        left_column_layout.addWidget(client_title)
+        left_column_layout.addSpacing(5)
+        left_column_layout.addWidget(client_frame)
+        left_column_layout.addSpacing(15)
 
-        # Contenedor para los libros - ALTURA AJUSTADA para dar más espacio a paginación
-        self.books_display = QFrame()
-        self.books_display.setStyleSheet("""
-            QFrame {
-                background-color: rgba(255, 255, 255, 0.15);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 12px;
+        # 2. Detalles del Pago
+        payment_title = QLabel("Detalles del Pago")
+        payment_title.setStyleSheet(title_label_style)
+        
+        payment_frame = QFrame()
+        payment_frame.setStyleSheet(content_frame_style)
+        payment_layout = QGridLayout(payment_frame)
+        payment_layout.setSpacing(10)
+        payment_layout.setContentsMargins(15, 15, 15, 15)
+
+        total_label = QLabel("Total a Pagar:")
+        total_label.setFont(QFont(self.font_family, 10))
+        total_label.setStyleSheet("color: #000000; background: transparent; border: none;")
+
+        self.total_amount_input = QLineEdit("0")
+        self.total_amount_input.setValidator(QIntValidator(0, 9999999))
+        self.total_amount_input.setFixedHeight(36)
+        self.total_amount_input.setStyleSheet(input_style)
+        self.total_amount_input.textChanged.connect(
+            lambda text, le=self.total_amount_input: self._handle_price_text_change(le, text)
+        )
+
+        paid_label = QLabel("Pago Realizado:")
+        paid_label.setFont(QFont(self.font_family, 10))
+        paid_label.setStyleSheet("color: #000000; background: transparent; border: none;")
+
+        self.paid_amount_input = QLineEdit("0")
+        self.paid_amount_input.setValidator(QIntValidator(0, 9999999))
+        self.paid_amount_input.setFixedHeight(36)
+        self.paid_amount_input.setStyleSheet(input_style)
+        self.paid_amount_input.textChanged.connect(
+            lambda text, le=self.paid_amount_input: self._handle_price_text_change(le, text)
+        )
+        
+        due_label = QLabel("Saldo Pendiente:")
+        due_label.setFont(QFont(self.font_family, 10))
+        due_label.setStyleSheet("color: #000000; background: transparent; border: none;")
+
+        self.due_amount_label = QLineEdit("0")
+        self.due_amount_label.setFixedHeight(36)
+        self.due_amount_label.setReadOnly(True)
+        self.due_amount_label.setStyleSheet("""
+            QLineEdit {
+                background-color: rgba(220, 220, 220, 0.7); border: 1px solid rgba(0, 0, 0, 0.15);
+                border-radius: 8px; padding: 0 15px; font-size: 14px; color: #555555; margin: 0px;
             }
         """)
-        # CAMBIO CLAVE: Altura optimizada para dejar espacio completo a paginación
-        self.books_display.setFixedHeight(170)  # Aumentada de 160 a 170
+
+        payment_layout.addWidget(total_label, 0, 0)
+        payment_layout.addWidget(self.total_amount_input, 0, 1)
+        payment_layout.addWidget(paid_label, 1, 0)
+        payment_layout.addWidget(self.paid_amount_input, 1, 1)
+        payment_layout.addWidget(due_label, 2, 0)
+        payment_layout.addWidget(self.due_amount_label, 2, 1)
+
+        left_column_layout.addWidget(payment_title)
+        left_column_layout.addSpacing(5)
+        left_column_layout.addWidget(payment_frame)
+        left_column_layout.addSpacing(15)
+
+        # 3. Notas
+        notes_title = QLabel("Notas Adicionales")
+        notes_title.setStyleSheet(title_label_style)
+
+        notes_frame = QFrame()
+        notes_frame.setStyleSheet(content_frame_style)
+        notes_layout = QVBoxLayout(notes_frame)
+        notes_layout.setContentsMargins(15, 10, 15, 10)
         
-        self.visible_books_layout = QVBoxLayout(self.books_display)
-        self.visible_books_layout.setContentsMargins(8, 8, 8, 8)
-        self.visible_books_layout.setSpacing(6)
+        self.notes_edit = QTextEdit()
+        self.notes_edit.setPlaceholderText("Añade notas sobre la reserva o venta...")
+        self.notes_edit.setMaximumHeight(46)
+        self.notes_edit.setStyleSheet("""
+            QTextEdit {
+                background-color: rgba(255, 255, 255, 0.65);
+                border: 1px solid rgba(0, 0, 0, 0.15);
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 14px;
+                color: #000;
+            }
+            QTextEdit:focus {
+                border: 1px solid rgba(74, 144, 226, 0.8);
+            }
+        """)
+        notes_layout.addWidget(self.notes_edit)
+
+        left_column_layout.addWidget(notes_title)
+        left_column_layout.addSpacing(5)
+        left_column_layout.addWidget(notes_frame)
+        left_column_layout.addStretch()
+
+        # Botón de Confirmar al final de la columna izquierda
+        self.confirm_button = QPushButton("Confirm Transaction")
+        self.confirm_button.setEnabled(False)
+        self.confirm_button.setFixedHeight(50)
+        self.confirm_button.setStyleSheet("""
+            QPushButton { 
+                background-color: #4A90E2; color: #000000; border: none; 
+                border-radius: 12px; font-size: 16px; font-weight: bold; 
+            }
+            QPushButton:hover { background-color: #357ABD; }
+            QPushButton:pressed { background-color: #2E6DA4; }
+            QPushButton:focus { outline: none; border: none; }
+        """)
+        self.confirm_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.confirm_button.clicked.connect(self.confirm_reservation)
+        left_column_layout.addWidget(self.confirm_button)
+
+        # --- COLUMNA DERECHA (BÚSQUEDA E ITEMS) ---
+        right_column = QWidget()
+        right_column_layout = QVBoxLayout(right_column)
+        right_column_layout.setContentsMargins(0, 0, 0, 0)
+        right_column_layout.setSpacing(0)
+
+        # 4. Búsqueda y Adición de Items
+        items_title = QLabel("Búsqueda y Items")
+        items_title.setStyleSheet(title_label_style)
+
+        items_frame = QFrame()
+        items_frame.setStyleSheet(content_frame_style)
+        items_layout = QVBoxLayout(items_frame)
+        items_layout.setSpacing(10)
+        items_layout.setContentsMargins(15, 15, 15, 15)
+
+        # Input ISBN y botones
+        isbn_input_layout = QHBoxLayout()
+        isbn_input_layout.setSpacing(10)
         
-        # Mensaje cuando no hay libros
-        self.no_books_label = QLabel("No books reserved yet.")
-        self.no_books_label.setStyleSheet("color: rgba(0, 0, 0, 0.7); background: transparent; font-style: italic;")
-        self.no_books_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.visible_books_layout.addWidget(self.no_books_label)
+        self.isbn_input = QLineEdit()
+        self.isbn_input.setPlaceholderText("Ingresa el ISBN y presiona Enter")
+        self.isbn_input.setFixedHeight(36)
+        self.isbn_input.setStyleSheet(input_style)
+        self.isbn_input.returnPressed.connect(self.add_item_from_input)
         
-        self.books_section_layout.addWidget(self.books_display)
+        icon_button_style = """
+            QPushButton { background-color: transparent; border: none; }
+            QPushButton:hover { background-color: rgba(0, 0, 0, 0.05); border-radius: 8px; }
+        """
         
-        # CAMBIO CLAVE: Navegación de páginas FUERA del contenedor de libros
-        self.page_nav = QFrame()
-        self.page_nav.setVisible(True)  # Se cambia a True para que siempre sea visible
-        self.page_nav.setFixedHeight(40)  # Altura aumentada para que no se recorte
-        self.page_nav.setStyleSheet("""
+        self.disc_button = QPushButton()
+        self.disc_button.setFixedSize(40, 40)
+        self.disc_button.setIcon(QIcon("app/imagenes/dvd.png"))
+        self.disc_button.setIconSize(QSize(28, 28))
+        self.disc_button.setStyleSheet(icon_button_style)
+        self.disc_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.disc_button.clicked.connect(self.add_disc_item)
+
+        self.promo_button = QPushButton()
+        self.promo_button.setFixedSize(40, 40)
+        self.promo_button.setIcon(QIcon("app/imagenes/descuento.png"))
+        self.promo_button.setIconSize(QSize(28, 28))
+        self.promo_button.setStyleSheet(icon_button_style)
+        self.promo_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.promo_button.clicked.connect(self.add_promo_item)
+
+        isbn_input_layout.addWidget(self.isbn_input)
+        isbn_input_layout.addWidget(self.disc_button)
+        isbn_input_layout.addWidget(self.promo_button)
+        items_layout.addLayout(isbn_input_layout)
+
+        # Frame para mostrar los items
+        self.items_display_frame = QFrame()
+        self.items_display_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.items_display_frame.setStyleSheet("""
             QFrame {
-                background-color: rgba(255, 255, 255, 0.1);
-                border: 1px solid rgba(255, 255, 255, 0.15);
+                background-color: rgba(255, 255, 255, 0.15);
+                border: 1px solid rgba(0, 0, 0, 0.08);
                 border-radius: 8px;
             }
         """)
+        self.visible_items_layout = QVBoxLayout(self.items_display_frame)
+        self.visible_items_layout.setContentsMargins(8, 8, 8, 8)
+        self.visible_items_layout.setSpacing(6)
         
+        self.no_items_label = QLabel("Aún no se han añadido items.")
+        self.no_items_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.no_items_label.setStyleSheet("color: rgba(0, 0, 0, 0.7); background: transparent; font-style: italic;")
+        self.visible_items_layout.addWidget(self.no_items_label)
+        items_layout.addWidget(self.items_display_frame)
+
+        # Navegación de página
+        self.page_nav = QFrame()
+        self.page_nav.setFixedHeight(40)
         self.page_nav_layout = QHBoxLayout(self.page_nav)
-        self.page_nav_layout.setContentsMargins(15, 7, 15, 7)  # Márgenes balanceados
+        self.page_nav_layout.setContentsMargins(0, 0, 0, 0)
         self.page_nav_layout.setSpacing(12)
         
         btn_style = """
             QPushButton { 
-                background-color: rgba(255, 255, 255, 0.2); 
-                border: 1px solid rgba(255, 255, 255, 0.3); 
-                border-radius: 12px; color: #000000; font-size: 12px; 
+                background-color: rgba(0, 0, 0, 0.05); 
+                border: 1px solid rgba(0, 0, 0, 0.1); 
+                border-radius: 8px; color: #000; font-size: 12px; 
                 font-weight: 500;
             } 
-            QPushButton:hover { 
-                background-color: rgba(255, 255, 255, 0.3); 
-            } 
+            QPushButton:hover { background-color: rgba(0, 0, 0, 0.08); } 
             QPushButton:disabled { 
-                background-color: rgba(255, 255, 255, 0.05); 
+                background-color: rgba(0, 0, 0, 0.02); 
                 color: rgba(0, 0, 0, 0.3); 
             }
-            QPushButton:focus { outline: none; border: none; }
         """
         
-        self.prev_button = QPushButton("◀ Previous")
-        self.prev_button.setFixedSize(85, 28)  # Botones ligeramente más grandes
+        self.prev_button = QPushButton("◀ Prev")
+        self.prev_button.setFixedSize(85, 28)
         self.prev_button.setStyleSheet(btn_style)
         self.prev_button.clicked.connect(self.prev_page)
         
@@ -331,7 +484,7 @@ class ReservationDialog(QDialog):
         self.page_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.next_button = QPushButton("Next ▶")
-        self.next_button.setFixedSize(85, 28)  # Botones ligeramente más grandes
+        self.next_button.setFixedSize(85, 28)
         self.next_button.setStyleSheet(btn_style)
         self.next_button.clicked.connect(self.next_page)
         
@@ -341,106 +494,200 @@ class ReservationDialog(QDialog):
         self.page_nav_layout.addStretch()
         self.page_nav_layout.addWidget(self.next_button)
         
-        # CAMBIO CLAVE: Agregar paginación directamente al layout principal de books_section
-        self.books_section_layout.addWidget(self.page_nav)
+        items_layout.addWidget(self.page_nav)
         
-        content_layout.addWidget(self.books_section)
-
-        # BOTÓN CONFIRMAR - FIJO
-        self.confirm_button = QPushButton("Confirm Reservation")
-        self.confirm_button.setFixedHeight(50)
-        self.confirm_button.setStyleSheet("""
-            QPushButton { 
-                background-color: #4A90E2; color: #000000; border: none; 
-                border-radius: 25px; font-size: 16px; font-weight: bold; 
-            } 
-            QPushButton:hover { 
-                background-color: #357ABD; 
-            } 
-            QPushButton:pressed { 
-                background-color: #2E6DA4; 
-            }
-            QPushButton:focus { outline: none; border: none; }
-        """)
-        self.confirm_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.confirm_button.clicked.connect(self.confirm_reservation)
-        content_layout.addWidget(self.confirm_button)
+        right_column_layout.addWidget(items_title)
+        right_column_layout.addSpacing(5)
+        right_column_layout.addWidget(items_frame)
+        
+        content_layout.addWidget(left_column, 1)
+        content_layout.addWidget(right_column, 2)
 
         container_layout.addWidget(content_widget)
 
-    def add_book_by_isbn(self):
+    def _handle_price_text_change(self, line_edit: QLineEdit, text: str):
+        line_edit.blockSignals(True)
+        
+        cursor_pos = line_edit.cursorPosition()
+        raw_text = text.replace('.', '')
+        
+        if raw_text.isdigit():
+            formatted_text = format_price_with_thousands_separator(raw_text)
+            line_edit.setText(formatted_text)
+            line_edit.setCursorPosition(cursor_pos + len(formatted_text) - len(text))
+        
+        line_edit.blockSignals(False)
+        self.update_due_amount()
+
+    def add_item_from_input(self):
         isbn = self.isbn_input.text().strip()
         if not isbn:
             return
+        self.add_book_by_isbn(isbn)
+
+    def add_book_by_isbn(self, isbn):
+        service_result = self.reservation_service.find_book_by_isbn_for_reservation(isbn)
+        status = service_result.get("status")
+
+        if status in ("no_encontrado", "no_disponible"):
+            QMessageBox.warning(self, "No Disponible", f"No hay copias disponibles en el inventario para el ISBN '{isbn}'.")
+            self.isbn_input.clear()
+            return
+
+        # Si hay múltiples fuentes de inventario (raro, pero posible), usamos la primera.
+        source_item = service_result.get("item") or (service_result.get("items")[0] if service_result.get("items") else None)
         
-        title = f"Book with ISBN {isbn}"
-        self.add_book_widget(isbn, title)
+        if not source_item:
+            QMessageBox.critical(self, "Error", "No se pudo obtener la información del item.")
+            self.isbn_input.clear()
+            return
+
+        source_id = source_item['id_inventario']
+        available_quantity = source_item.get('cantidad', 0)
+
+        # Contar cuántas copias de este item de inventario ya están en la reserva
+        reserved_count = sum(1 for item in self.reserved_items if item.get('id_inventario') == source_id)
+
+        if reserved_count < available_quantity:
+            self.add_book_item(source_item.copy()) # Añadir una copia del diccionario
+        else:
+            QMessageBox.information(self, "No más copias", "Todas las copias disponibles de este libro ya han sido añadidas a la reserva.")
+        
         self.isbn_input.clear()
 
-    def add_book_widget(self, isbn, title):
-        book_widget = BookItemWidget(isbn, title)
-        book_widget.remove_requested.connect(self.remove_book_widget)
-        self.reserved_books.append(book_widget)
+    def add_promo_item(self):
+        promo_data = {
+            'id_inventario': f"promo_{uuid.uuid4()}",
+            'tipo_item': 'promocion',
+            'descripcion': 'Promoción',
+            'precio_venta': 10000
+        }
+        self.add_book_item(promo_data)
+
+    def add_disc_item(self):
+        price, ok = QInputDialog.getInt(self, "Precio del Disco", "Ingrese el precio del disco:", 10000, 0, 1000000, 100)
+        if ok:
+            disc_data = {
+                'id_inventario': f"disc_{uuid.uuid4()}",
+                'tipo_item': 'disco',
+                'descripcion': 'Disco',
+                'precio_venta': price
+            }
+            self.add_book_item(disc_data)
+
+    def get_total_amount(self):
+        return sum(item.get('precio_venta', 0) for item in self.reserved_items)
+
+    def update_due_amount(self):
+        try:
+            total_amount = int(self.total_amount_input.text().replace('.', ''))
+        except (ValueError, TypeError):
+            total_amount = 0
         
-        # Ir a la última página donde estará el nuevo libro
-        total_pages = (len(self.reserved_books) - 1) // self.books_per_page
+        try:
+            paid_amount = int(self.paid_amount_input.text().replace('.', ''))
+        except (ValueError, TypeError):
+            paid_amount = 0
+        
+        due_amount = total_amount - paid_amount
+        self.due_amount_label.setText(format_price_with_thousands_separator(due_amount))
+
+    def on_full_payment_toggled(self, checked):
+        self.paid_amount_input.setEnabled(not checked)
+        if checked:
+            total_amount = self.get_total_amount()
+            self.paid_amount_input.setText(format_price_with_thousands_separator(total_amount))
+        else:
+            self.paid_amount_input.setText("0")
+
+    def add_book_item(self, book_data):
+        # Validación de precio
+        if not book_data.get('precio_venta') or book_data.get('precio_venta') <= 0:
+            QMessageBox.warning(self, "Precio Inválido", 
+                                f"El libro '{book_data.get('titulo', 'N/A')}' no puede ser añadido porque su precio es cero o no es válido.")
+            return
+
+        self.reserved_items.append(book_data)
+        
+        total_pages = (len(self.reserved_items) - 1) // self.items_per_page
         self.current_page = total_pages
         
-        self.update_books_display()
+        self.update_items_display()
 
-    def remove_book_widget(self, book_widget):
-        if book_widget in self.reserved_books:
-            self.reserved_books.remove(book_widget)
-            book_widget.deleteLater()
-            
-            # Ajustar página actual si es necesario
-            if self.reserved_books:
-                total_pages = (len(self.reserved_books) - 1) // self.books_per_page
-                if self.current_page > total_pages:
-                    self.current_page = max(0, total_pages)
-            else:
-                self.current_page = 0
-            
-            self.update_books_display()
-
-    def update_books_display(self):
-        # Limpiar el layout actual
-        while self.visible_books_layout.count():
-            child = self.visible_books_layout.takeAt(0)
-            if child.widget():
-                child.widget().setParent(None)
+    def remove_book_widget(self, inventory_id_to_remove):
+        # Encuentra y elimina el libro de la lista de datos
+        self.reserved_items = [book for book in self.reserved_items if book['id_inventario'] != inventory_id_to_remove]
         
-        if not self.reserved_books:
-            # Mostrar mensaje cuando no hay libros
-            self.no_books_label = QLabel("No books reserved yet.")
-            self.no_books_label.setStyleSheet("color: rgba(0, 0, 0, 0.7); background: transparent; font-style: italic;")
-            self.no_books_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.visible_books_layout.addWidget(self.no_books_label)
+        if self.reserved_items:
+            total_pages = (len(self.reserved_items) - 1) // self.items_per_page
+            if self.current_page > total_pages:
+                self.current_page = max(0, total_pages)
         else:
+            self.current_page = 0
+        
+        self.update_items_display()
+
+    def update_items_display(self):
+        # Limpiar el layout actual
+        while self.visible_items_layout.count():
+            child = self.visible_items_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+        
+        if not self.reserved_items:
+            no_items_label = QLabel("Aún no se han añadido items.")
+            no_items_label.setStyleSheet("color: rgba(0, 0, 0, 0.7); background: transparent; font-style: italic;")
+            no_items_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.visible_items_layout.addWidget(no_items_label)
+        else:
+            # Agrupar items para mostrarlos apilados
+            grouped_items = {}
+            for item in self.reserved_items:
+                # La clave para agrupar es el ISBN para libros, o el tipo para otros items
+                key = item.get('libro_isbn') if 'libro_isbn' in item else item.get('tipo_item')
+                if key not in grouped_items:
+                    grouped_items[key] = {'data': item, 'count': 0, 'ids': []}
+                grouped_items[key]['count'] += 1
+                grouped_items[key]['ids'].append(item['id_inventario'])
+
             # Mostrar libros de la página actual
-            start_idx = self.current_page * self.books_per_page
-            end_idx = min(start_idx + self.books_per_page, len(self.reserved_books))
+            start_idx = self.current_page * self.items_per_page
+            # Esto necesita ser ajustado para paginación de grupos, no de items individuales
+            # Por ahora, mostraremos todos los grupos
             
-            for i in range(start_idx, end_idx):
-                book_widget = self.reserved_books[i]
-                self.visible_books_layout.addWidget(book_widget)
+            for group in grouped_items.values():
+                book_widget = BookItemWidget(group['data'], group['count'])
+                # Conectamos la señal para que emita el ID del *primer* item del grupo
+                book_widget.remove_requested.connect(
+                    lambda item_id=group['ids'][0]: self.remove_book_widget(item_id)
+                )
+                self.visible_items_layout.addWidget(book_widget)
             
             # Agregar espaciador para mantener la distribución
-            self.visible_books_layout.addStretch()
+            self.visible_items_layout.addStretch()
+
+        total_amount = self.get_total_amount()
+        # Bloquear señales para evitar bucles de actualización no deseados
+        self.total_amount_input.blockSignals(True)
+        self.total_amount_input.setText(format_price_with_thousands_separator(total_amount))
+        self.total_amount_input.blockSignals(False)
         
+        self.update_due_amount()
+
+        self.confirm_button.setEnabled(len(self.reserved_items) > 0)
         self.update_navigation()
 
     def update_navigation(self):
         # Mostrar navegación siempre
         self.page_nav.setVisible(True) # Asegura que la barra de navegación siempre sea visible
         
-        if not self.reserved_books:
+        if not self.reserved_items:
             self.page_info.setText("Página 0 de 0")
             self.prev_button.setEnabled(False)
             self.next_button.setEnabled(False)
             return
 
-        total_pages = (len(self.reserved_books) - 1) // self.books_per_page + 1
+        total_pages = (len(self.reserved_items) - 1) // self.items_per_page + 1
         self.page_info.setText(f"Página {self.current_page + 1} de {total_pages}")
         self.prev_button.setEnabled(self.current_page > 0)
         self.next_button.setEnabled(self.current_page < total_pages - 1)
@@ -448,23 +695,98 @@ class ReservationDialog(QDialog):
     def prev_page(self):
         if self.current_page > 0:
             self.current_page -= 1
-            self.update_books_display()
+            self.update_items_display()
 
     def next_page(self):
-        total_pages = (len(self.reserved_books) - 1) // self.books_per_page
+        total_pages = (len(self.reserved_items) - 1) // self.items_per_page
         if self.current_page < total_pages:
             self.current_page += 1
-            self.update_books_display()
+            self.update_items_display()
 
     def confirm_reservation(self):
         client_name = self.client_name_input.text().strip()
         client_phone = self.client_phone_input.text().strip()
         
-        if not client_name or not client_phone or not self.reserved_books:
-            print("Faltan datos para la reserva.")
+        if not client_name or not client_phone:
+            QMessageBox.warning(self, "Datos Incompletos", "Por favor, ingrese el nombre y el teléfono del cliente.")
             return
+
+        if not self.reserved_items:
+            QMessageBox.warning(self, "Sin Items", "No hay items en la lista.")
+            return
+
+        notes = self.notes_edit.toPlainText().strip()
         
-        self.accept()
+        try:
+            total_amount = float(self.total_amount_input.text().replace('.', ''))
+            paid_amount = float(self.paid_amount_input.text().replace('.', ''))
+            due_amount = total_amount - paid_amount
+        except ValueError:
+            QMessageBox.warning(self, "Monto Inválido", "El monto pagado y el total deben ser números válidos.")
+            return
+
+        if due_amount < 0:
+            QMessageBox.warning(self, "Saldo Inválido", "¡El saldo no puede ser negativo, confirma los datos en Detalles de pago!")
+            return
+
+        # Validaciones de pago simplificadas
+        if total_amount <= 0 and len(self.reserved_items) > 0:
+             QMessageBox.warning(self, "Monto Inválido", "El monto total debe ser mayor a cero.")
+             return
+        
+        if paid_amount < 0:
+            QMessageBox.warning(self, "Pago Inválido", "El monto pagado no puede ser negativo.")
+            return
+
+        is_sale = paid_amount >= total_amount
+
+        client_id = self.reservation_service.find_or_create_client(client_name, client_phone)
+        if not client_id:
+            QMessageBox.critical(self, "Error de Cliente", "No se pudo encontrar o crear el cliente.")
+            return
+
+        # Para el servicio, solo enviamos los items que son libros reales del inventario
+        items_for_service = [
+            item for item in self.reserved_items if 'libro_isbn' in item
+        ]
+
+        if is_sale:
+            # Lógica para Venta Directa
+            success, message = self.reservation_service.create_direct_sale(
+                client_id=client_id,
+                book_items=[
+                    {
+                        'id_inventario': item['id_inventario'], 
+                        'precio_venta': item.get('precio_venta', 0),
+                        'libro_isbn': item.get('libro_isbn')
+                    } 
+                    for item in items_for_service
+                ],
+                total_amount=total_amount,
+                notes=notes
+            )
+        else:
+            # Lógica para Reserva
+            success, message = self.reservation_service.create_reservation(
+                client_id=client_id,
+                book_items=[
+                    {
+                        'id_inventario': item['id_inventario'], 
+                        'precio_venta': item.get('precio_venta', 0),
+                        'libro_isbn': item.get('libro_isbn')
+                    } 
+                    for item in items_for_service
+                ],
+                total_amount=total_amount,
+                paid_amount=paid_amount,
+                notes=notes
+            )
+
+        if success:
+            QMessageBox.information(self, "Transacción Exitosa", message)
+            self.accept()
+        else:
+            QMessageBox.critical(self, "Error en la Transacción", message)
 
     def _enable_blur(self, enable: bool):
         if self._blur_effect:

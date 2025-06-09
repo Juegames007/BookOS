@@ -10,11 +10,27 @@
       },
       {
         "nombre": "ventas",
-        "definicion": "(id_venta INTEGER PRIMARY KEY AUTOINCREMENT, item_inventario_id INTEGER, libro_isbn TEXT NOT NULL, cantidad_vendida INTEGER NOT NULL, precio_unitario_venta INTEGER NOT NULL, precio_total_venta INTEGER NOT NULL, fecha_venta DATETIME DEFAULT (datetime('now')), medio_de_pago TEXT, FOREIGN KEY (libro_isbn) REFERENCES libros (isbn) ON DELETE RESTRICT ON UPDATE CASCADE, FOREIGN KEY (item_inventario_id) REFERENCES inventario (id_inventario) ON DELETE SET NULL ON UPDATE CASCADE)"
+        "definicion": "(id_venta INTEGER PRIMARY KEY AUTOINCREMENT, id_cliente INTEGER NOT NULL, monto_total REAL NOT NULL, notas TEXT, fecha_venta DATETIME DEFAULT (datetime('now')), FOREIGN KEY (id_cliente) REFERENCES clientes (id_cliente) ON DELETE RESTRICT)"
+      },
+      {
+        "nombre": "detalles_venta",
+        "definicion": "(id_venta INTEGER NOT NULL, libro_isbn TEXT NOT NULL, cantidad INTEGER NOT NULL, precio_unitario REAL NOT NULL, PRIMARY KEY (id_venta, libro_isbn), FOREIGN KEY (id_venta) REFERENCES ventas (id_venta) ON DELETE CASCADE, FOREIGN KEY (libro_isbn) REFERENCES libros (isbn) ON DELETE CASCADE)"
       },
       {
         "nombre": "historial_busquedas",
         "definicion": "(id_busqueda INTEGER PRIMARY KEY AUTOINCREMENT, termino_buscado TEXT NOT NULL, fecha_busqueda DATETIME DEFAULT (datetime('now')), resultados_encontrados INTEGER DEFAULT 0)"
+      },
+      {
+        "nombre": "clientes",
+        "definicion": "(id_cliente INTEGER PRIMARY KEY AUTOINCREMENT, nombre TEXT NOT NULL, telefono TEXT NOT NULL UNIQUE)"
+      },
+      {
+        "nombre": "reservas",
+        "definicion": "(id_reserva INTEGER PRIMARY KEY AUTOINCREMENT, id_cliente INTEGER NOT NULL, monto_total REAL NOT NULL, monto_pagado REAL NOT NULL, estado TEXT NOT NULL, notas TEXT, fecha_creacion DATETIME DEFAULT (datetime('now')), fecha_actualizacion DATETIME DEFAULT (datetime('now')), FOREIGN KEY (id_cliente) REFERENCES clientes (id_cliente) ON DELETE RESTRICT)"
+      },
+      {
+        "nombre": "detalles_reserva",
+        "definicion": "(id_reserva INTEGER NOT NULL, libro_isbn TEXT NOT NULL, cantidad INTEGER NOT NULL, precio_unitario REAL NOT NULL, PRIMARY KEY (id_reserva, libro_isbn), FOREIGN KEY (id_reserva) REFERENCES reservas (id_reserva) ON DELETE CASCADE, FOREIGN KEY (libro_isbn) REFERENCES libros (isbn) ON DELETE CASCADE)"
       }
     ]
   }
