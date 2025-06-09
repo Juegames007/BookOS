@@ -29,41 +29,6 @@ from features.book_service import BookService
 from features.reservation_service import ReservationService
 from gui.dialogs.search_results_window import SearchResultsWindow
 
-def accion_pendiente(nombre_accion, parent_window=None):
-    """
-    Muestra un mensaje de acción pendiente o ejecuta la acción correspondiente.
-    """
-    data_manager = DependencyFactory.get_data_manager()
-    book_info_fetcher = DependencyFactory.get_book_info_service()
-    actual_book_service = BookService(data_manager, book_info_fetcher)
-    reservation_service = ReservationService(data_manager)
-    
-    accion_limpia = nombre_accion.strip()
-
-
-    if accion_limpia == "Agregar Libro":
-        dialog = AddBookDialog(actual_book_service, parent_window)
-        dialog.exec()
-        
-    elif accion_limpia == "Modificar Libro":
-        dialog = ModifyBookDialog(actual_book_service, parent=parent_window)
-        dialog.exec()
-    
-    # --- INICIO DE LA MODIFICACIÓN ---
-    elif accion_limpia == "Apartar / Ver":
-        options_dialog = ReservationOptionsDialog(parent=parent_window)
-        options_dialog.create_new_requested.connect(
-            lambda: open_reservation_dialog(reservation_service, parent_window)
-        )
-        # Aquí conectarías la señal view_existing_requested a la futura ventana
-        # options_dialog.view_existing_requested.connect(...)
-        options_dialog.exec()
-    # --- FIN DE LA MODIFICACIÓN ---
-
-def open_reservation_dialog(reservation_service, parent_window):
-    dialog = ReservationDialog(reservation_service, parent=parent_window)
-    dialog.exec()
-
 class VentanaGestionLibreria(QMainWindow):
     """
     Ventana principal de la aplicación de gestión de librería.
@@ -72,9 +37,13 @@ class VentanaGestionLibreria(QMainWindow):
         super().__init__()
         self.setWindowTitle("BookOS - Gestión de Librería")
         self.font_family = FONTS["family"]
+        
+        # --- Centralización de la creación de servicios ---
         data_manager = DependencyFactory.get_data_manager()
         book_info_fetcher = DependencyFactory.get_book_info_service()
         self.book_service = BookService(data_manager, book_info_fetcher)
+        self.reservation_service = ReservationService(data_manager)
+
         target_width, target_height = 1366, 768
         try:
             screen_geometry = QApplication.primaryScreen().geometry()
@@ -128,7 +97,28 @@ class VentanaGestionLibreria(QMainWindow):
         super().keyPressEvent(event)
 
     def _handle_menu_action(self, accion: str):
-        accion_pendiente(accion, self)
+        accion_limpia = accion.strip()
+
+        if accion_limpia == "Agregar Libro":
+            dialog = AddBookDialog(self.book_service, self)
+            dialog.exec()
+            
+        elif accion_limpia == "Modificar Libro":
+            dialog = ModifyBookDialog(self.book_service, self)
+            dialog.exec()
+        
+        elif accion_limpia == "Apartar / Ver":
+            options_dialog = ReservationOptionsDialog(self)
+            result = options_dialog.exec()
+
+            if result == ReservationOptionsDialog.CREATE_NEW:
+                QTimer.singleShot(0, self._open_reservation_dialog)
+            elif result == ReservationOptionsDialog.VIEW_EXISTING:
+                QMessageBox.information(self, "Próximamente", "La función para ver reservas existentes estará disponible pronto.")
+    
+    def _open_reservation_dialog(self):
+        dialog = ReservationDialog(self.reservation_service, self)
+        dialog.exec()
     
     def resizeEvent(self, event):
         super().resizeEvent(event)

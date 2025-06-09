@@ -92,6 +92,7 @@ class BookItemWidget(QFrame):
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
         
         self.remove_button = QPushButton()
+        self.remove_button.setAutoDefault(False)
         self.remove_button.setFixedSize(20, 20)
         
         try:
@@ -185,6 +186,7 @@ class ReservationDialog(QDialog):
         title_label.setStyleSheet("color: #000000; background: transparent; border: none; margin-top: 5px;")
         
         self.close_button = QPushButton("×")
+        self.close_button.setAutoDefault(False)
         self.close_button.setFixedSize(32, 32)
         self.close_button.setFont(QFont(self.font_family, 16, QFont.Weight.Bold))
         self.close_button.setStyleSheet("""
@@ -366,6 +368,7 @@ class ReservationDialog(QDialog):
 
         # Botón de Confirmar al final de la columna izquierda
         self.confirm_button = QPushButton("Confirm Transaction")
+        self.confirm_button.setAutoDefault(False)
         self.confirm_button.setEnabled(False)
         self.confirm_button.setFixedHeight(50)
         self.confirm_button.setStyleSheet("""
@@ -413,6 +416,7 @@ class ReservationDialog(QDialog):
         """
         
         self.disc_button = QPushButton()
+        self.disc_button.setAutoDefault(False)
         self.disc_button.setFixedSize(40, 40)
         self.disc_button.setIcon(QIcon("app/imagenes/dvd.png"))
         self.disc_button.setIconSize(QSize(28, 28))
@@ -421,6 +425,7 @@ class ReservationDialog(QDialog):
         self.disc_button.clicked.connect(self.add_disc_item)
 
         self.promo_button = QPushButton()
+        self.promo_button.setAutoDefault(False)
         self.promo_button.setFixedSize(40, 40)
         self.promo_button.setIcon(QIcon("app/imagenes/descuento.png"))
         self.promo_button.setIconSize(QSize(28, 28))
@@ -475,6 +480,7 @@ class ReservationDialog(QDialog):
         """
         
         self.prev_button = QPushButton("◀ Prev")
+        self.prev_button.setAutoDefault(False)
         self.prev_button.setFixedSize(85, 28)
         self.prev_button.setStyleSheet(btn_style)
         self.prev_button.clicked.connect(self.prev_page)
@@ -484,6 +490,7 @@ class ReservationDialog(QDialog):
         self.page_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         self.next_button = QPushButton("Next ▶")
+        self.next_button.setAutoDefault(False)
         self.next_button.setFixedSize(85, 28)
         self.next_button.setStyleSheet(btn_style)
         self.next_button.clicked.connect(self.next_page)

@@ -1,13 +1,13 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QFrame
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QPainter, QColor
 
 class ReservationOptionsDialog(QDialog):
     """
     Diálogo para elegir entre crear una nueva reserva o ver las existentes.
     """
-    create_new_requested = Signal()
-    view_existing_requested = Signal()
+    CREATE_NEW = 10
+    VIEW_EXISTING = 20
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -78,9 +78,7 @@ class ReservationOptionsDialog(QDialog):
         main_layout.addWidget(container_frame)
 
     def accept_create_new(self):
-        self.create_new_requested.emit()
-        self.accept()
+        self.done(self.CREATE_NEW)
 
     def accept_view_existing(self):
-        self.view_existing_requested.emit()
-        self.accept() 
+        self.done(self.VIEW_EXISTING) 
