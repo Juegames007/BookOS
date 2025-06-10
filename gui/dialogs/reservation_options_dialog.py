@@ -1,13 +1,13 @@
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QFrame
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QPainter, QColor
 
 class ReservationOptionsDialog(QDialog):
     """
     Diálogo para elegir entre crear una nueva reserva o ver las existentes.
     """
-    CREATE_NEW = 10
-    VIEW_EXISTING = 20
+    new_reservation_requested = Signal()
+    view_reservations_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -62,12 +62,12 @@ class ReservationOptionsDialog(QDialog):
         self.add_button = QPushButton("Crear Nueva Reserva")
         self.add_button.setStyleSheet(button_style)
         self.add_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.add_button.clicked.connect(self.accept_create_new)
+        self.add_button.clicked.connect(self.create_new_triggered)
 
         self.view_button = QPushButton("Ver Reservas Existentes")
         self.view_button.setStyleSheet(button_style.replace("#4A90E2", "#555555").replace("#357ABD", "#444444").replace("#2E6DA4", "#333333"))
         self.view_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.view_button.clicked.connect(self.accept_view_existing)
+        self.view_button.clicked.connect(self.view_existing_triggered)
 
         buttons_layout.addWidget(self.add_button)
         buttons_layout.addWidget(self.view_button)
@@ -77,8 +77,10 @@ class ReservationOptionsDialog(QDialog):
         
         main_layout.addWidget(container_frame)
 
-    def accept_create_new(self):
-        self.done(self.CREATE_NEW)
+    def create_new_triggered(self):
+        self.new_reservation_requested.emit()
+        self.accept()
 
-    def accept_view_existing(self):
-        self.done(self.VIEW_EXISTING) 
+    def view_existing_triggered(self):
+        self.view_reservations_requested.emit()
+        self.accept() 

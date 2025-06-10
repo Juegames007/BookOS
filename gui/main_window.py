@@ -24,6 +24,7 @@ from gui.dialogs.add_book_dialog import AddBookDialog
 from gui.dialogs.modify_book_dialog import ModifyBookDialog
 from gui.dialogs.reservation_dialog import ReservationDialog
 from gui.dialogs.reservation_options_dialog import ReservationOptionsDialog
+from gui.dialogs.view_reservations_dialog import ViewReservationsDialog
 from gui.components.menu_section_widget import MenuSectionWidget
 from features.book_service import BookService
 from features.reservation_service import ReservationService
@@ -104,20 +105,27 @@ class VentanaGestionLibreria(QMainWindow):
             dialog.exec()
             
         elif accion_limpia == "Modificar Libro":
-            dialog = ModifyBookDialog(self.book_service, self)
+            dialog = ModifyBookDialog(book_service=self.book_service, parent=self)
             dialog.exec()
         
         elif accion_limpia == "Apartar / Ver":
             options_dialog = ReservationOptionsDialog(self)
-            result = options_dialog.exec()
-
-            if result == ReservationOptionsDialog.CREATE_NEW:
-                QTimer.singleShot(0, self._open_reservation_dialog)
-            elif result == ReservationOptionsDialog.VIEW_EXISTING:
-                QMessageBox.information(self, "Próximamente", "La función para ver reservas existentes estará disponible pronto.")
+            options_dialog.new_reservation_requested.connect(self._open_reservation_dialog)
+            options_dialog.view_reservations_requested.connect(self._open_view_reservations_dialog)
+            options_dialog.exec()
     
     def _open_reservation_dialog(self):
+        QTimer.singleShot(0, lambda: self._create_and_exec_reservation_dialog())
+
+    def _create_and_exec_reservation_dialog(self):
         dialog = ReservationDialog(self.reservation_service, self)
+        dialog.exec()
+
+    def _open_view_reservations_dialog(self):
+        QTimer.singleShot(0, lambda: self._create_and_exec_view_reservations_dialog())
+
+    def _create_and_exec_view_reservations_dialog(self):
+        dialog = ViewReservationsDialog(self.reservation_service, self)
         dialog.exec()
     
     def resizeEvent(self, event):

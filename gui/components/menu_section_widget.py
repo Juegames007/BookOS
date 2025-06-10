@@ -50,9 +50,9 @@ class MenuSectionWidget(QWidget):
         layout_inventario_columna.setSpacing(card_spacing)
 
         opciones_inventario_main = [
-            {"icon": "agregar.png", "text": "  Agregar Libro", "action": "Agregar Libro"},
+            {"icon": "agregar.png", "text": "  Agregar", "action": "Agregar Libro"},
             {"icon": "apartar.png", "text": "  Reservas", "action": "Apartar / Ver"},
-            {"icon": "modificar.png", "text": "  Modificar Libro", "action": "Modificar Libro"}
+            {"icon": "modificar.png", "text": "  Mod. Inventario", "action": "Modificar Libro"}
         ]
         inventario_card_principal = MainMenuCard(opciones_inventario_main, card_width, main_card_height, "Inventario")
         inventario_card_principal.action_triggered.connect(self.action_triggered.emit)
