@@ -217,9 +217,7 @@ class ReservationService:
     def get_reservation_details(self, reservation_id: int) -> Optional[Dict[str, Any]]:
         """
         Obtiene los detalles completos de una reserva específica.
-
         Esto incluye datos del cliente, libros reservados y estado financiero.
-        
         :param reservation_id: El ID de la reserva a buscar.
         :return: Un diccionario con los detalles de la reserva, o None si no se encuentra.
         """
@@ -236,14 +234,16 @@ class ReservationService:
             JOIN clientes c ON r.id_cliente = c.id_cliente
             WHERE r.id_reserva = ?
         """
-        reservation_details = self.data_manager.fetch_query(base_query, (reservation_id,), one=True)
+        results = self.data_manager.fetch_query(base_query, (reservation_id,))
+        reservation_details = results[0] if results else None
 
         if not reservation_details:
             return None
 
         # 2. Obtener la suma de abonos de la tabla de ingresos
         paid_amount_query = "SELECT SUM(monto) as total_abonado FROM ingresos WHERE id_reserva = ?"
-        paid_amount_result = self.data_manager.fetch_query(paid_amount_query, (reservation_id,), one=True)
+        paid_amount_results = self.data_manager.fetch_query(paid_amount_query, (reservation_id,))
+        paid_amount_result = paid_amount_results[0] if paid_amount_results else None
         reservation_details['monto_abonado'] = paid_amount_result['total_abonado'] if paid_amount_result and paid_amount_result['total_abonado'] else 0
 
         # 3. Obtener los libros asociados a la reserva
@@ -335,7 +335,7 @@ class ReservationService:
                 return False, "La reserva no existe."
             
             client_id_query = "SELECT id_cliente FROM reservas WHERE id_reserva = ?"
-            client_id = self.data_manager.fetch_query(client_id_query, (reservation_id,), one=True)['id_cliente']
+            client_id = self.data_manager.fetch_query(client_id_query, (reservation_id,))[0]['id_cliente']
 
             # 1. Crear la entrada en la tabla 'ventas'
             total_amount = details['monto_total']

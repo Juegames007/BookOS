@@ -55,14 +55,14 @@ class ElidedLabel(QLabel):
 
 class BookItemWidget(QFrame):
     """Widget individual para cada libro en la reserva"""
-    remove_requested = Signal(object)
+    remove_requested = Signal(str)
     
     def __init__(self, book_data: dict, count: int, parent=None):
         super().__init__(parent)
         self.book_data = book_data
         self.count = count
-        # Usamos el ISBN como identificador único para el item
-        self.item_id = self.book_data.get('libro_isbn', str(uuid.uuid4()))
+        # La clave para identificar el grupo es el ISBN, o el ID único para items genéricos.
+        self.group_id = self.book_data.get('libro_isbn') or self.book_data.get('id')
         self.setup_ui()
     
     def setup_ui(self):
@@ -80,51 +80,41 @@ class BookItemWidget(QFrame):
         layout.setContentsMargins(12, 0, 8, 0)
         layout.setSpacing(8)
         
+        # Lógica de texto mejorada
         if 'titulo' in self.book_data:
+            # Es un libro
             info = f"{self.book_data['titulo']} (Pos: {self.book_data.get('posicion', 'N/A')})"
+            price_str = format_price_with_thousands_separator(self.book_data.get('precio_venta', 0))
+            full_text = f"{info} - {price_str}"
         else:
-            info = self.book_data.get('descripcion', 'Item')
+            # Es un item genérico (la descripción ya contiene el precio)
+            full_text = self.book_data.get('descripcion', 'Item Desconocido')
 
-        count_str = f" (x{self.count})" if self.count > 1 else ""
-        price_str = format_price_with_thousands_separator(self.book_data.get('precio_venta', 0))
-        book_info_text = f"{info}{count_str} - {price_str}"
+        # El contador solo se aplica a libros (items que se agrupan)
+        count_str = f" (x{self.count})" if self.count > 1 and 'titulo' in self.book_data else ""
+        final_text = f"{full_text}{count_str}"
 
-
-        self.info_label = ElidedLabel(book_info_text)
+        self.info_label = ElidedLabel(final_text)
         self.info_label.setFont(QFont("Arial", 10))
         self.info_label.setStyleSheet("color: #000000; border: none; background: transparent;")
         self.info_label.setWordWrap(False)
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
         
-        self.remove_button = QPushButton()
+        self.remove_button = QPushButton("×")
         self.remove_button.setAutoDefault(False)
         self.remove_button.setFixedSize(20, 20)
-        
-        try:
-            # Reemplaza con la ruta correcta si es necesario
-            icon_path = os.path.join(os.path.dirname(__file__), "icono_eliminar.png")
-            if os.path.exists(icon_path):
-                icon_pixmap = QPixmap(icon_path)
-                scaled_pixmap = icon_pixmap.scaled(16, 16, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                self.remove_button.setIcon(QIcon(scaled_pixmap))
-            else:
-                self.remove_button.setText("×")
-        except Exception:
-            self.remove_button.setText("×")
-            
         self.remove_button.setStyleSheet("""
             QPushButton {
-                background-color: #ff4444; color: #000000; border: none;
+                background-color: #ff4444; color: white; border: none;
                 border-radius: 10px; font-size: 14px; font-weight: bold;
             }
             QPushButton:hover { background-color: #cc3333; }
         """)
-        # Emitimos el ID único del item para su eliminación
-        self.remove_button.clicked.connect(lambda: self.remove_requested.emit(self.item_id))
+        # Emitimos el ID del GRUPO para su eliminación
+        self.remove_button.clicked.connect(lambda: self.remove_requested.emit(self.group_id))
         
         layout.addWidget(self.info_label, 1)
         layout.addWidget(self.remove_button)
-
 
 class ReservationDialog(QDialog):
     """
@@ -142,12 +132,14 @@ class ReservationDialog(QDialog):
         self.font_family = FONTS.get("family", "Arial")
         self._drag_pos = QPoint()
         self.top_bar_height = 50
-        self.reserved_items = []
+        
+        # --- Lógica de Estado de Precios REESTRUCTURADA ---
+        self.reserved_items = []    # Lista maestra con precios ORIGINALES.
+        self.displayed_items = []   # Lista con precios ajustados para la UI.
+        self.manual_total = None    # Si es un float, un descuento manual está activo.
+
         self.current_page = 0
         self.items_per_page = 4
-
-        self.original_total = 0.0
-        self.manual_total_edit = False
 
         self._blur_effect = None
         if self.parent():
@@ -309,7 +301,7 @@ class ReservationDialog(QDialog):
                 color: #2E86C1;
             }}
         """)
-        self.total_amount_input.textChanged.connect(self._on_total_manually_changed)
+        self.total_amount_input.textChanged.connect(self.finalize_total_edit)
         self.total_amount_input.editingFinished.connect(self.finalize_total_edit)
 
         # Abono
@@ -455,14 +447,14 @@ class ReservationDialog(QDialog):
                 border-radius: 8px;
             }
         """)
-        self.visible_items_layout = QVBoxLayout(self.items_display_frame)
-        self.visible_items_layout.setContentsMargins(8, 8, 8, 8)
-        self.visible_items_layout.setSpacing(6)
+        self.items_container_layout = QVBoxLayout(self.items_display_frame)
+        self.items_container_layout.setContentsMargins(8, 8, 8, 8)
+        self.items_container_layout.setSpacing(6)
         
         self.no_items_label = QLabel("Aún no se han añadido items.")
         self.no_items_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.no_items_label.setStyleSheet("color: rgba(0, 0, 0, 0.7); background: transparent; font-style: italic;")
-        self.visible_items_layout.addWidget(self.no_items_label)
+        self.items_container_layout.addWidget(self.no_items_label)
         items_layout.addWidget(self.items_display_frame)
 
         # Navegación de página
@@ -520,25 +512,31 @@ class ReservationDialog(QDialog):
         container_layout.addWidget(content_widget)
 
     def finalize_total_edit(self):
-        # Primero, formatear el campo de texto.
+        """Se llama cuando el usuario termina de editar el campo del total."""
         raw_text = ''.join(filter(str.isdigit, self.total_amount_input.text()))
         new_total = float(raw_text) if raw_text else 0.0
-        self.total_amount_input.blockSignals(True)
-        self.total_amount_input.setText(format_price_with_thousands_separator(new_total))
-        self.total_amount_input.blockSignals(False)
-
-        # Si fue una edición manual, redistribuir el precio.
-        if self.manual_total_edit and abs(new_total - self.original_total) > 0.01:
-            try:
-                adjusted_items = self._distribute_difference(new_total)
-                self.reserved_items = adjusted_items
-                # Actualizar la UI. Esto llama a update_total_amount, que consolida el nuevo total.
-                self.update_items_display()
-            except ValueError as e:
-                QMessageBox.critical(self, "Error de Distribución", str(e))
-                # Si falla, revertir el campo de texto al último total válido.
-                self.total_amount_input.setText(format_price_with_thousands_separator(self.original_total))
         
+        base_total = self.get_base_total()
+
+        # Si el usuario establece el total de vuelta al original, cancelamos el descuento.
+        if abs(new_total - base_total) < 0.01:
+            self.manual_total = None
+        else:
+            # Si no, guardamos el nuevo total manual.
+            self.manual_total = new_total
+        
+        self.update_all_views()
+
+    def _on_total_manually_changed(self, text):
+        # Esta función ahora solo limpia el input, no cambia el estado.
+        # La lógica de estado se maneja en finalize_total_edit.
+        if not self.total_amount_input.hasFocus():
+            return
+        raw_text = ''.join(filter(str.isdigit, text))
+        if text != raw_text:
+            self.total_amount_input.blockSignals(True)
+            self.total_amount_input.setText(raw_text)
+            self.total_amount_input.blockSignals(False)
         self.update_due_amount()
 
     def format_paid_amount_edit(self):
@@ -548,16 +546,6 @@ class ReservationDialog(QDialog):
         self.paid_amount_input.setText(format_price_with_thousands_separator(value))
         self.paid_amount_input.blockSignals(False)
         self.update_due_amount()
-
-    def _on_total_manually_changed(self, text):
-        if self.total_amount_input.hasFocus():
-            self.manual_total_edit = True
-            raw_text = ''.join(filter(str.isdigit, text))
-            if text != raw_text:
-                self.total_amount_input.blockSignals(True)
-                self.total_amount_input.setText(raw_text)
-                self.total_amount_input.blockSignals(False)
-            self.update_due_amount()
 
     def _format_line_edit_price(self, line_edit: QLineEdit, is_total_field=False):
         # Este método ahora puede ser simplificado o eliminado si la nueva lógica lo cubre.
@@ -573,8 +561,8 @@ class ReservationDialog(QDialog):
         line_edit.blockSignals(False)
 
         if is_total_field:
-            if not self.manual_total_edit:
-                self.original_total = value
+            if not self.manual_total:
+                self.manual_total = value
             self.update_due_amount()
             
     def _handle_price_text_change(self, line_edit: QLineEdit, text: str):
@@ -624,8 +612,7 @@ class ReservationDialog(QDialog):
 
     def add_promo_item(self):
         promo_data = {
-            'id_inventario': f"promo_{uuid.uuid4()}",
-            'tipo_item': 'promocion',
+            'id': f"promo_{uuid.uuid4()}",  # ID ÚNICO
             'descripcion': 'Promoción',
             'precio_venta': 10000
         }
@@ -635,14 +622,14 @@ class ReservationDialog(QDialog):
         price, ok = QInputDialog.getInt(self, "Precio del Disco", "Ingrese el precio del disco:", 10000, 0, 1000000, 100)
         if ok:
             disc_data = {
-                'id_inventario': f"disc_{uuid.uuid4()}",
-                'tipo_item': 'disco',
-                'descripcion': 'Disco',
+                'id': f"disc_{uuid.uuid4()}",  # ID ÚNICO
+                'descripcion': f'Disco - {format_price_with_thousands_separator(price)}',
                 'precio_venta': price
             }
             self.add_book_item(disc_data)
 
-    def get_total_amount(self):
+    def get_base_total(self):
+        """Calcula el total a partir de los precios originales en la lista maestra."""
         return sum(item.get('precio_venta', 0) for item in self.reserved_items)
 
     def update_due_amount(self):
@@ -659,104 +646,151 @@ class ReservationDialog(QDialog):
             self.due_amount_label.setText("$ Error")
 
     def on_full_payment_toggled(self, checked):
-        self.paid_amount_input.setEnabled(not checked)
-        if checked:
-            total_amount = self.get_total_amount()
-            self.paid_amount_input.setText(format_price_with_thousands_separator(total_amount))
-        else:
-            self.paid_amount_input.setText("0")
-
-    def add_book_item(self, book_data):
-        if not isinstance(book_data.get('precio_venta'), (int, float)):
-            QMessageBox.warning(self, "Precio Inválido", f"El libro '{book_data['titulo']}' no tiene un precio válido.")
-            return
-
-        # Damos un ID único a cada instancia de item que añadimos
-        new_item = book_data.copy()
-        new_item['item_instance_id'] = str(uuid.uuid4())
-        self.reserved_items.append(new_item)
-        self.update_items_display()
-
-    def remove_book_group(self, instance_ids_to_remove: list):
-        # Al hacer clic en la 'x' de un grupo, eliminamos todas sus instancias.
-        self.reserved_items = [item for item in self.reserved_items if item.get('item_instance_id') not in instance_ids_to_remove]
-        # Reseteamos la página si nos quedamos fuera de rango.
-        total_groups = len(self._get_grouped_items())
-        total_pages = (total_groups - 1) // self.items_per_page + 1
-        if self.current_page >= total_pages:
-            self.current_page = max(0, total_pages - 1)
-        
-        self.update_items_display()
-
-    def _get_grouped_items(self):
-        grouped_items = {}
-        for item in self.reserved_items:
-            group_key = item.get('libro_isbn') or item.get('id_inventario')
-            if group_key not in grouped_items:
-                grouped_items[group_key] = {'data': item, 'count': 0, 'instance_ids': []}
-            grouped_items[group_key]['count'] += 1
-            grouped_items[group_key]['instance_ids'].append(item['item_instance_id'])
-        return grouped_items
-
-    def update_items_display(self):
-        # Limpiar el layout, preservando la etiqueta "no items"
-        for i in reversed(range(self.visible_items_layout.count())):
-            layout_item = self.visible_items_layout.itemAt(i)
-            widget = layout_item.widget()
-
-            # Si es la etiqueta de "no items", la saltamos
-            if widget and widget == self.no_items_label:
-                continue
-            
-            # Si es cualquier otro widget (libro) o un espaciador, lo eliminamos.
-            # takeAt() lo quita del layout
-            item_to_remove = self.visible_items_layout.takeAt(i)
-            if item_to_remove.widget():
-                item_to_remove.widget().deleteLater()
-            # liberamos el QLayoutItem
-            del item_to_remove
-
-        if not self.reserved_items:
-            self.no_items_label.setVisible(True)
-        else:
-            self.no_items_label.setVisible(False)
-            
-            # Agrupar items para mostrarlos apilados sin modificar sus datos
-            grouped_items = self._get_grouped_items()
-
-            # Paginación sobre los GRUPOS
-            all_groups = list(grouped_items.values())
-            start_idx = self.current_page * self.items_per_page
-            end_idx = start_idx + self.items_per_page
-            visible_groups = all_groups[start_idx:end_idx]
-
-            for group in visible_groups:
-                # Pasamos el 'data' del representante y el conteo.
-                # El precio que se mostrará es el del item individual, que es lo correcto.
-                book_widget = BookItemWidget(group['data'], group['count'])
-                
-                # Al remover, se eliminan todas las instancias de ese grupo.
-                group_instance_ids = group['instance_ids']
-                # La señal 'remove_requested' del widget ahora disparará la eliminación del grupo.
-                book_widget.remove_requested.connect(
-                    lambda ids=group_instance_ids: self.remove_book_group(ids)
-                )
-                self.visible_items_layout.insertWidget(0, book_widget)
-            
-            self.visible_items_layout.addStretch()
-
-        total_amount = self.get_total_amount()
-        self.original_total = total_amount
-        self.manual_total_edit = False
-        
-        # Bloquear señales para evitar bucles de actualización no deseados
-        self.total_amount_input.blockSignals(True)
-        self.total_amount_input.setText(format_price_with_thousands_separator(total_amount))
-        self.total_amount_input.blockSignals(False)
-        
+        self.paid_amount_input.setDisabled(checked)
         self.update_due_amount()
 
+    def add_book_item(self, book_data):
+        # Al añadir un nuevo libro, cualquier descuento manual se resetea.
+        self.manual_total = None
+        self.reserved_items.append(book_data)
+        self.update_all_views()
+
+    def remove_book_group(self, group_id_to_remove: str):
+        """Elimina un grupo de items y re-calcula el descuento si está activo."""
+        base_total_before = self.get_base_total()
+        
+        discount_ratio = None
+        if self.manual_total is not None and base_total_before > 0:
+            discount_ratio = self.manual_total / base_total_before
+
+        initial_count = len(self.reserved_items)
+        # La clave de eliminación coincide con la de agrupación
+        def get_item_id(item): return item.get('libro_isbn') or item.get('id')
+        self.reserved_items = [item for item in self.reserved_items if get_item_id(item) != group_id_to_remove]
+        
+        if len(self.reserved_items) < initial_count:
+            if discount_ratio is not None:
+                new_base_total = self.get_base_total()
+                self.manual_total = new_base_total * discount_ratio
+            
+            self.update_all_views()
+
+    def update_all_views(self):
+        """
+        Función central que recalcula los precios de visualización y actualiza toda la UI.
+        """
+        base_total = self.get_base_total()
+        display_total = base_total
+
+        if self.manual_total is not None:
+            display_total = self.manual_total
+            try:
+                # Obtenemos la lista de items con precios ajustados
+                self.displayed_items = self._get_adjusted_items(self.reserved_items, display_total)
+            except ValueError as e:
+                QMessageBox.critical(self, "Error de Descuento", str(e))
+                # Si hay un error (ej. precio negativo), revertimos el descuento.
+                self.manual_total = None
+                display_total = base_total
+                self.displayed_items = [item.copy() for item in self.reserved_items]
+        else:
+            # Sin descuento, la lista de visualización es una copia de la lista maestra.
+            self.displayed_items = [item.copy() for item in self.reserved_items]
+
+        # Actualizamos la UI con los datos correctos
+        self.update_items_display() # Usa self.displayed_items
+        self.update_total_amount_display(display_total) # Muestra el total correcto
+        self.update_due_amount() # Actualiza el saldo
+
+    def update_total_amount_display(self, display_total: float):
+        """Actualiza el QLineEdit del total."""
+        self.total_amount_input.blockSignals(True)
+        self.total_amount_input.setText(format_price_with_thousands_separator(display_total))
+        self.total_amount_input.blockSignals(False)
         self.confirm_button.setEnabled(len(self.reserved_items) > 0)
+
+    def _get_adjusted_items(self, base_items: list, target_total: float) -> list:
+        """
+        Toma una lista de items con precios base y devuelve una nueva lista
+        con precios ajustados para que sumen el target_total.
+        """
+        adjusted = [item.copy() for item in base_items]
+        base_total = sum(item.get('precio_venta', 0) for item in adjusted)
+
+        if base_total == 0:
+            if target_total != 0 and adjusted:
+                # Si partimos de 0, distribuimos el nuevo total equitativamente
+                avg_price = target_total / len(adjusted)
+                for item in adjusted: item['precio_venta'] = avg_price
+            # y corregimos redondeo...
+        else:
+            scale_factor = target_total / base_total
+            running_total = 0
+            for item in adjusted[:-1]:
+                new_price = round(item['precio_venta'] * scale_factor)
+                if new_price < 0: raise ValueError(f"El ajuste crea un precio negativo para '{item.get('titulo', 'N/A')}'.")
+                item['precio_venta'] = new_price
+                running_total += new_price
+            
+            if adjusted:
+                last_item = adjusted[-1]
+                last_price = target_total - running_total
+                if last_price < 0: raise ValueError("El ajuste crea un precio negativo para el último item.")
+                last_item['precio_venta'] = last_price
+
+        # Verificación final de redondeo
+        final_sum = sum(item.get('precio_venta', 0) for item in adjusted)
+        if adjusted and abs(final_sum - target_total) > 0.01:
+            adjusted[-1]['precio_venta'] += target_total - final_sum
+            
+        return adjusted
+
+    def update_items_display(self):
+        """
+        Reconstruye la lista de widgets de items, manejando el layout correctamente
+        para evitar crashes y problemas de posicionamiento.
+        """
+        # Limpiar el layout de todos los widgets y espaciadores, EXCEPTO de self.no_items_label
+        for i in reversed(range(self.items_container_layout.count())):
+            layout_item = self.items_container_layout.itemAt(i)
+            widget = layout_item.widget()
+
+            # Si es la etiqueta "no items", la saltamos y la dejamos intacta en el layout.
+            if widget and widget == self.no_items_label:
+                continue
+
+            # Si es cualquier otra cosa (un libro o un espaciador), lo quitamos del layout.
+            taken_item = self.items_container_layout.takeAt(i)
+            
+            # Y si era un widget, lo marcamos para ser eliminado de la memoria.
+            if taken_item and taken_item.widget():
+                taken_item.widget().deleteLater()
+            # Los espaciadores simplemente se descartan al ser quitados del layout.
+
+        grouped_items = self._get_grouped_items()
+        
+        # Ahora que el layout está limpio (o solo contiene a no_items_label),
+        # podemos gestionar la visibilidad y añadir los nuevos items.
+        self.no_items_label.setVisible(not bool(grouped_items))
+
+        if grouped_items:
+            # Paginación
+            start_index = self.current_page * self.items_per_page
+            end_index = start_index + self.items_per_page
+            
+            page_item_groups = list(grouped_items.values())[start_index:end_index]
+
+            for group in page_item_groups:
+                first_item = group['items'][0]
+                count = group['count']
+                
+                item_widget = BookItemWidget(first_item, count)
+                item_widget.remove_requested.connect(self.remove_book_group)
+                self.items_container_layout.addWidget(item_widget)
+
+        # Añadir un espaciador al final para empujar todos los items hacia arriba.
+        self.items_container_layout.addStretch(1)
+
         self.update_navigation()
 
     def update_navigation(self):
@@ -794,11 +828,11 @@ class ReservationDialog(QDialog):
             QMessageBox.warning(self, "Datos Incompletos", "El nombre y el teléfono del cliente son obligatorios.")
             return
 
-        if not self.reserved_items:
+        if not self.displayed_items:
             QMessageBox.warning(self, "Sin Artículos", "Agregue al menos un artículo a la reserva.")
             return
 
-        final_items = self.reserved_items
+        final_items = self.displayed_items
         
         raw_total_str = "".join(filter(str.isdigit, self.total_amount_input.text()))
         final_total = float(raw_total_str) if raw_total_str else 0.0
@@ -842,68 +876,17 @@ class ReservationDialog(QDialog):
         else:
             QMessageBox.critical(self, "Error", f"No se pudo completar la operación:\n{message}")
 
-    def _distribute_difference(self, new_total: float) -> List[dict]:
-        if not self.reserved_items:
-            return []
-
-        # self.original_total debe ser establecido correctamente por update_items_display
-        if self.original_total == 0:
-            if new_total < 0:
-                raise ValueError("El nuevo total no puede ser negativo.")
-            item_count = len(self.reserved_items)
-            if item_count == 0: return []
-            
-            price_per_item = round(new_total / item_count)
-            adjusted_items = [item.copy() for item in self.reserved_items]
-            for item in adjusted_items:
-                item['precio_venta'] = price_per_item
-            
-            current_total = sum(item['precio_venta'] for item in adjusted_items)
-            rounding_diff = new_total - current_total
-            if adjusted_items and abs(rounding_diff) > 0:
-                adjusted_items[-1]['precio_venta'] += rounding_diff
-            return adjusted_items
-
-        difference = new_total - self.original_total
-        adjusted_items = []
-        running_total = 0.0
-
-        # Iterar sobre todos los items menos el último
-        for item in self.reserved_items[:-1]:
-            new_item = item.copy()
-            original_price = float(item.get('precio_venta', 0))
-            
-            proportion = original_price / self.original_total if self.original_total != 0 else 0
-            adjustment = difference * proportion
-            
-            new_price = round(original_price + adjustment)
-            
-            if new_price < 0:
-                raise ValueError(f"El ajuste resulta en un precio negativo para '{item.get('descripcion', item.get('titulo', 'N/A'))}'.")
-            
-            new_item['precio_venta'] = new_price
-            adjusted_items.append(new_item)
-            running_total += new_price
-        
-        # El último item absorbe el resto para garantizar que la suma sea exacta
-        if self.reserved_items:
-            last_item = self.reserved_items[-1].copy()
-            last_item_new_price = new_total - running_total
-            
-            if last_item_new_price < 0:
-                descripcion = last_item.get('descripcion', last_item.get('titulo', 'N/A'))
-                raise ValueError(f"El ajuste resulta en un precio negativo para el último artículo ('{descripcion}'). Esto puede ocurrir si el descuento es demasiado grande.")
-
-            last_item['precio_venta'] = round(last_item_new_price)
-            adjusted_items.append(last_item)
-            
-            # Verificación final por si el redondeo del último item causó un desfase
-            final_total = sum(item['precio_venta'] for item in adjusted_items)
-            final_diff = new_total - final_total
-            if abs(final_diff) > 0:
-                last_item['precio_venta'] += final_diff
-
-        return adjusted_items
+    def _get_grouped_items(self):
+        """Agrupa los items de la lista de VISUALIZACIÓN."""
+        grouped = {}
+        for item in self.displayed_items:
+            # Clave de agrupación: ISBN para libros, ID único para el resto.
+            group_key = item.get('libro_isbn') or item.get('id')
+            if group_key not in grouped:
+                grouped[group_key] = {'items': [], 'count': 0}
+            grouped[group_key]['items'].append(item)
+            grouped[group_key]['count'] += 1
+        return grouped
 
     def _enable_blur(self, enable: bool):
         if self._blur_effect:
