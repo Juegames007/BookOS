@@ -61,6 +61,7 @@ class ReservationItemWidget(QFrame):
         client_name_label = ElidedLabel(self.reservation_data.get('cliente_nombre', 'N/A'))
         client_name_label.setFont(QFont("Montserrat", 11))
         client_name_label.setStyleSheet("color: #1A202C;")
+        client_name_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
 
         res_id_widget = QWidget()
         res_id_layout = QHBoxLayout(res_id_widget)
