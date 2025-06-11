@@ -107,26 +107,37 @@ class ReservationService:
             concepto_ingreso = f"Abono inicial para reserva #{id_reserva}"
             self.data_manager.execute_query(ingreso_query, (paid_amount, concepto_ingreso, id_reserva))
 
-            # 3. Agrupar items por ISBN y procesar el inventario y los detalles
+            # 3. Procesar inventario y detalles de la reserva
             from collections import defaultdict
-            items_by_isbn = defaultdict(lambda: {'count': 0, 'price': 0})
-            for item in book_items:
-                isbn = item.get('libro_isbn')
-                if isbn:
-                    items_by_isbn[isbn]['count'] += 1
-                    items_by_isbn[isbn]['price'] = item.get('precio_venta', 0)
+            
+            books_by_isbn = defaultdict(lambda: {'count': 0, 'total_price': 0.0})
+            generic_items = []
 
-            for isbn, data in items_by_isbn.items():
+            for item in book_items:
+                if 'libro_isbn' in item:
+                    isbn = item['libro_isbn']
+                    books_by_isbn[isbn]['count'] += 1
+                    books_by_isbn[isbn]['total_price'] += item.get('precio_venta', 0)
+                else:
+                    generic_items.append(item)
+
+            # Guardar libros en detalles_reserva y actualizar inventario
+            for isbn, data in books_by_isbn.items():
                 count = data['count']
-                price = data['price']
+                unit_price = data['total_price'] / count if count > 0 else 0
                 
-                # Decrementar la cantidad del inventario
                 decrement_query = "UPDATE inventario SET cantidad = cantidad - ? WHERE libro_isbn = ? AND cantidad >= ?"
                 self.data_manager.execute_query(decrement_query, (count, isbn, count))
 
-                # Añadir a detalles_reserva
                 detalle_query = "INSERT INTO detalles_reserva (id_reserva, libro_isbn, cantidad, precio_unitario) VALUES (?, ?, ?, ?)"
-                self.data_manager.execute_query(detalle_query, (id_reserva, isbn, count, price))
+                self.data_manager.execute_query(detalle_query, (id_reserva, isbn, count, unit_price))
+
+            # Guardar items genéricos en detalles_reserva
+            for item in generic_items:
+                item_id = item.get('id')
+                price = item.get('precio_venta', 0)
+                detalle_query = "INSERT INTO detalles_reserva (id_reserva, libro_isbn, cantidad, precio_unitario) VALUES (?, ?, ?, ?)"
+                self.data_manager.execute_query(detalle_query, (id_reserva, item_id, 1, price))
 
             return True, f"Reserva #{id_reserva} creada con éxito."
 
@@ -231,7 +242,7 @@ class ReservationService:
                 r.id_reserva,
                 r.monto_total,
                 r.notas,
-                r.fecha_creacion,
+                r.fecha_creacion as fecha_reserva,
                 c.nombre as cliente_nombre,
                 c.telefono as cliente_telefono
             FROM reservas r
@@ -258,10 +269,21 @@ class ReservationService:
                 dr.cantidad,
                 dr.precio_unitario
             FROM detalles_reserva dr
-            JOIN libros l ON dr.libro_isbn = l.isbn
+            LEFT JOIN libros l ON dr.libro_isbn = l.isbn
             WHERE dr.id_reserva = ?
         """
         books = self.data_manager.fetch_query(books_query, (reservation_id,))
+        
+        if books:
+            for book in books:
+                if not book.get('titulo'):
+                    if book['libro_isbn'].startswith('promo_'):
+                        book['titulo'] = 'Promoción'
+                    elif book['libro_isbn'].startswith('disc_'):
+                        book['titulo'] = 'Disco'
+                    else:
+                        book['titulo'] = 'Artículo Genérico'
+
         reservation_details['libros'] = books if books else []
 
         return reservation_details

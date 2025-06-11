@@ -18,7 +18,7 @@
       },
       {
         "nombre": "detalles_reserva",
-        "definicion": "(id_detalle_reserva INTEGER PRIMARY KEY AUTOINCREMENT, id_reserva INTEGER NOT NULL, libro_isbn TEXT NOT NULL, cantidad INTEGER NOT NULL, precio_unitario REAL NOT NULL, FOREIGN KEY (id_reserva) REFERENCES reservas (id_reserva) ON DELETE CASCADE, FOREIGN KEY (libro_isbn) REFERENCES libros (isbn) ON DELETE CASCADE)"
+        "definicion": "(id_detalle_reserva INTEGER PRIMARY KEY AUTOINCREMENT, id_reserva INTEGER NOT NULL, libro_isbn TEXT NOT NULL, cantidad INTEGER NOT NULL, precio_unitario REAL NOT NULL, FOREIGN KEY (id_reserva) REFERENCES reservas (id_reserva) ON DELETE CASCADE)"
       },
       {
         "nombre": "ventas",
