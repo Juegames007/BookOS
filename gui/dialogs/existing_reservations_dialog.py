@@ -52,7 +52,7 @@ class ReservationItemWidget(QFrame):
         content_widget = QWidget()
         content_layout = QHBoxLayout(content_widget)
         content_layout.setContentsMargins(0,0,0,0)
-        content_layout.setSpacing(8)
+        content_layout.setSpacing(15)
 
         client_title_label = QLabel("Nombre del cliente:")
         client_title_label.setFont(QFont("Montserrat", 11, QFont.Weight.DemiBold))
@@ -62,6 +62,12 @@ class ReservationItemWidget(QFrame):
         client_name_label.setFont(QFont("Montserrat", 11))
         client_name_label.setStyleSheet("color: #1A202C;")
 
+        res_id_widget = QWidget()
+        res_id_layout = QHBoxLayout(res_id_widget)
+        res_id_layout.setContentsMargins(0,0,0,0)
+        res_id_layout.setSpacing(8)
+        res_id_layout.setAlignment(Qt.AlignRight)
+
         res_title_label = QLabel("Num Reserva:")
         res_title_label.setFont(QFont("Montserrat", 11, QFont.Weight.DemiBold))
         res_title_label.setStyleSheet("color: #4A5568;")
@@ -70,11 +76,12 @@ class ReservationItemWidget(QFrame):
         res_id_label.setFont(QFont("Montserrat", 11))
         res_id_label.setStyleSheet("color: #1A202C;")
         
+        res_id_layout.addWidget(res_title_label)
+        res_id_layout.addWidget(res_id_label)
+
         content_layout.addWidget(client_title_label)
         content_layout.addWidget(client_name_label, 1)
-        content_layout.addStretch()
-        content_layout.addWidget(res_title_label)
-        content_layout.addWidget(res_id_label)
+        content_layout.addWidget(res_id_widget)
 
         content_widget.setObjectName("contentWidget")
 
