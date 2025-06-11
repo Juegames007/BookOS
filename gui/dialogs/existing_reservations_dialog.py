@@ -108,13 +108,6 @@ class ReservationItemWidget(QFrame):
     def sizeHint(self):
         return QSize(super().sizeHint().width(), 75)
 
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setBrush(QColor(255, 255, 255, 255))
-        painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(self.rect(), 15, 15)
-
 class ExistingReservationsDialog(QDialog):
     def __init__(self, reservation_service: ReservationService, parent=None):
         super().__init__(parent)
@@ -139,7 +132,7 @@ class ExistingReservationsDialog(QDialog):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setBrush(QColor(226, 232, 240, 250))
+        painter.setBrush(QColor(226, 232, 240, 100))
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(self.rect(), 15, 15)
 
@@ -222,10 +215,9 @@ class ExistingReservationsDialog(QDialog):
         list_container.setObjectName("listContainer")
         list_container.setStyleSheet("""
             #listContainer { 
-                background-color: rgba(247, 250, 252, 0.8); 
+                background-color: rgba(247, 250, 252, 0.63); 
                 border-radius: 16px; 
                 border: 2px solid #CBD5E0;
-                padding: 8px;
             }
         """)
         
@@ -234,6 +226,7 @@ class ExistingReservationsDialog(QDialog):
         container_layout.setSpacing(12)
         
         self.list_widget = QListWidget()
+        self.list_widget.viewport().setAutoFillBackground(False)
         self.list_widget.setSpacing(12)
         # El QListWidget ahora solo es el fondo para los items, sin bordes propios
         self.list_widget.setStyleSheet("""
@@ -241,6 +234,9 @@ class ExistingReservationsDialog(QDialog):
                 background-color: transparent; 
                 border: none;
                 outline: none;
+            }
+            QListWidget::viewport {
+                background: transparent;
             }
             QListWidget::item {
                 border: none;
