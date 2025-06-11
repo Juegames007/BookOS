@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QListWidget, QListWidgetItem, 
                              QWidget, QHBoxLayout, QLabel, QPushButton, QFrame,
-                             QSizePolicy, QStackedWidget, QLineEdit, QMessageBox, QButtonGroup)
+                             QSizePolicy, QStackedWidget, QLineEdit, QMessageBox, QButtonGroup,
+                             QGraphicsDropShadowEffect)
 from PySide6.QtGui import (QFont, QPainter, QColor, QBrush, QPen, QFontMetrics,
                          QFontDatabase, QPainterPath)
 from PySide6.QtCore import Qt, QSize, QPropertyAnimation, QPoint, QEasingCurve, Property
@@ -28,9 +29,18 @@ class ReservationItemWidget(QFrame):
         self.init_ui()
         self.setProperty("checked", self.is_checked)
 
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(15)
+        shadow.setColor(QColor(102, 126, 234, 40))
+        shadow.setOffset(0, 2)
+        shadow.setEnabled(False)
+        self.setGraphicsEffect(shadow)
+        self.shadow_effect = shadow
+
     def setChecked(self, checked):
         if self.is_checked != checked:
             self.is_checked = checked
+            self.shadow_effect.setEnabled(checked)
             self.setProperty("checked", checked)
             self.style().unpolish(self)
             self.style().polish(self)
@@ -100,12 +110,10 @@ class ReservationItemWidget(QFrame):
             #ReservationItemWidget:hover { 
                 border-color: #667EEA;
                 background-color: rgba(255, 255, 255, 0.95);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             }
             #ReservationItemWidget[checked="true"] {
                 background-color: rgba(235, 244, 255, 0.9);
                 border: 2px solid rgba(102, 126, 234, 0.9);
-                box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
             }
             #contentWidget, #contentWidget * {
                 background: transparent;
