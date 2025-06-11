@@ -80,20 +80,23 @@ class BookItemWidget(QFrame):
         layout.setContentsMargins(12, 0, 8, 0)
         layout.setSpacing(8)
         
-        # Lógica de texto mejorada
+        # --- Lógica de texto REFACTORIZADA ---
+        price = self.book_data.get('precio_venta', 0)
+        price_str = format_price_with_thousands_separator(price)
+
         if 'titulo' in self.book_data:
             # Es un libro
             info = f"{self.book_data['titulo']} (Pos: {self.book_data.get('posicion', 'N/A')})"
-            price_str = format_price_with_thousands_separator(self.book_data.get('precio_venta', 0))
             full_text = f"{info} - {price_str}"
         else:
-            # Es un item genérico (la descripción ya contiene el precio)
-            full_text = self.book_data.get('descripcion', 'Item Desconocido')
+            # Es un item genérico (la descripción NO contiene el precio)
+            base_description = self.book_data.get('descripcion', 'Item Desconocido')
+            full_text = f"{base_description} - {price_str}"
 
         # El contador solo se aplica a libros (items que se agrupan)
         count_str = f" (x{self.count})" if self.count > 1 and 'titulo' in self.book_data else ""
         final_text = f"{full_text}{count_str}"
-
+        
         self.info_label = ElidedLabel(final_text)
         self.info_label.setFont(QFont("Arial", 10))
         self.info_label.setStyleSheet("color: #000000; border: none; background: transparent;")
@@ -268,6 +271,7 @@ class ReservationDialog(QDialog):
         self.client_phone_input.setPlaceholderText("Número de contacto")
         self.client_phone_input.setFixedHeight(36)
         self.client_phone_input.setStyleSheet(input_style)
+        self.client_phone_input.textChanged.connect(self._validate_phone_input)
         
         client_layout.addWidget(self.client_name_input)
         client_layout.addWidget(self.client_phone_input)
@@ -612,7 +616,7 @@ class ReservationDialog(QDialog):
 
     def add_promo_item(self):
         promo_data = {
-            'id': f"promo_{uuid.uuid4()}",  # ID ÚNICO
+            'id': f"promo_{uuid.uuid4()}",
             'descripcion': 'Promoción',
             'precio_venta': 10000
         }
@@ -622,8 +626,8 @@ class ReservationDialog(QDialog):
         price, ok = QInputDialog.getInt(self, "Precio del Disco", "Ingrese el precio del disco:", 10000, 0, 1000000, 100)
         if ok:
             disc_data = {
-                'id': f"disc_{uuid.uuid4()}",  # ID ÚNICO
-                'descripcion': f'Disco - {format_price_with_thousands_separator(price)}',
+                'id': f"disc_{uuid.uuid4()}",
+                'descripcion': 'Disco',
                 'precio_venta': price
             }
             self.add_book_item(disc_data)
@@ -823,6 +827,10 @@ class ReservationDialog(QDialog):
     def confirm_reservation(self):
         client_name = self.client_name_input.text().strip()
         client_phone = self.client_phone_input.text().strip()
+
+        if any(char.isdigit() for char in client_name):
+            QMessageBox.warning(self, "Nombre Inválido", "El nombre del cliente no puede contener números.")
+            return
         
         if not client_name or not client_phone:
             QMessageBox.warning(self, "Datos Incompletos", "El nombre y el teléfono del cliente son obligatorios.")
@@ -842,8 +850,9 @@ class ReservationDialog(QDialog):
         
         notes = self.notes_edit.toPlainText().strip()
         
-        # La lógica de descuento/distribución ya ocurrió en tiempo real.
-        # Simplemente procedemos con los datos actuales.
+        if paid_amount <= 0:
+            QMessageBox.warning(self, "Abono Requerido", "No es posible crear una reserva sin un abono inicial.")
+            return
 
         client_id = self.reservation_service.get_or_create_client(client_name, client_phone)
         if client_id is None:
@@ -854,21 +863,13 @@ class ReservationDialog(QDialog):
              QMessageBox.warning(self, "Monto Inválido", "El abono no puede ser mayor que el total a pagar.")
              return
 
-        if paid_amount > 0:
-            success, message = self.reservation_service.create_reservation(
-                client_id=client_id, 
-                book_items=final_items, 
-                total_amount=final_total, 
-                paid_amount=paid_amount,
-                notes=notes
-            )
-        else:
-             success, message = self.reservation_service.create_direct_sale(
-                client_id=client_id,
-                book_items=final_items,
-                total_amount=final_total,
-                notes=notes
-            )
+        success, message = self.reservation_service.create_reservation(
+            client_id=client_id, 
+            book_items=final_items, 
+            total_amount=final_total, 
+            paid_amount=paid_amount,
+            notes=notes
+        )
 
         if success:
             QMessageBox.information(self, "Éxito", message)
@@ -937,3 +938,14 @@ class ReservationDialog(QDialog):
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         self._drag_pos = QPoint()
+
+    def _validate_phone_input(self, text: str):
+        """Filtra el texto del QLineEdit para permitir solo dígitos."""
+        clean_text = ''.join(filter(str.isdigit, text))
+        if text != clean_text:
+            self.client_phone_input.blockSignals(True)
+            # Mover el cursor al final después de cambiar el texto
+            cursor_pos = len(clean_text)
+            self.client_phone_input.setText(clean_text)
+            self.client_phone_input.setCursorPosition(cursor_pos)
+            self.client_phone_input.blockSignals(False)

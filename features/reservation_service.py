@@ -185,6 +185,10 @@ class ReservationService:
         except Exception as e:
             return False, f"Error inesperado al crear la venta: {str(e)}"
 
+    def get_all_reservations(self) -> List[Dict[str, Any]]:
+        """Alias para obtener todas las reservas activas."""
+        return self.get_all_active_reservations()
+
     def get_all_active_reservations(self) -> List[Dict[str, Any]]:
         """
         Obtiene todas las reservas que están en estado 'PENDIENTE'.

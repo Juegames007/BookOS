@@ -11,7 +11,7 @@ import os
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QSizePolicy, QSpacerItem, QMessageBox, QFrame, QApplication,
-    QLineEdit, QInputDialog
+    QLineEdit, QInputDialog, QGraphicsBlurEffect
 )
 from PySide6.QtGui import QFont, QPixmap, QPainter, QIcon
 from PySide6.QtCore import Qt, QPoint, QSize, QTimer, QEvent
@@ -24,11 +24,12 @@ from gui.dialogs.add_book_dialog import AddBookDialog
 from gui.dialogs.modify_book_dialog import ModifyBookDialog
 from gui.dialogs.reservation_dialog import ReservationDialog
 from gui.dialogs.reservation_options_dialog import ReservationOptionsDialog
-from gui.dialogs.view_reservations_dialog import ViewReservationsDialog
+from gui.dialogs.existing_reservations_dialog import ExistingReservationsDialog
 from gui.components.menu_section_widget import MenuSectionWidget
 from features.book_service import BookService
 from features.reservation_service import ReservationService
 from gui.dialogs.search_results_window import SearchResultsWindow
+from core.sqlmanager import SQLManager
 
 class VentanaGestionLibreria(QMainWindow):
     """
@@ -125,8 +126,15 @@ class VentanaGestionLibreria(QMainWindow):
         QTimer.singleShot(0, lambda: self._create_and_exec_view_reservations_dialog())
 
     def _create_and_exec_view_reservations_dialog(self):
-        dialog = ViewReservationsDialog(self.reservation_service, self)
-        dialog.exec()
+        blur_effect = QGraphicsBlurEffect()
+        blur_effect.setBlurRadius(15)
+        self.main_menu_widget.setGraphicsEffect(blur_effect)
+
+        try:
+            dialog = ExistingReservationsDialog(self.reservation_service, self)
+            dialog.exec()
+        finally:
+            self.main_menu_widget.setGraphicsEffect(None)
     
     def resizeEvent(self, event):
         super().resizeEvent(event)

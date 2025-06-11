@@ -1,0 +1,1 @@
+# Este archivo puede estar vacío. Su presencia convierte al directorio 'resources' en un paquete de Python. 
