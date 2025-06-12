@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QListWidget, QListWidgetIte
                              QSizePolicy, QStackedWidget, QLineEdit, QMessageBox, QButtonGroup,
                              QGraphicsDropShadowEffect, QInputDialog)
 from PySide6.QtGui import (QFont, QPainter, QColor, QBrush, QPen, QFontMetrics,
-                         QFontDatabase, QPainterPath, QPixmap)
+                         QFontDatabase, QPainterPath, QPixmap, QMouseEvent)
 from PySide6.QtCore import Qt, QSize, QPropertyAnimation, QPoint, QEasingCurve, Property
 from datetime import datetime
 from features.reservation_service import ReservationService
@@ -208,6 +208,8 @@ class ExistingReservationsDialog(QDialog):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
         
+        self.drag_pos = QPoint()
+
         self.setObjectName("ReservationsDialog")
         self.init_ui()
         self.load_reservations()
