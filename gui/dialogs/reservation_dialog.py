@@ -307,7 +307,7 @@ class ReservationDialog(QDialog):
                 color: #2E86C1;
             }}
         """)
-        self.total_amount_input.textChanged.connect(self.finalize_total_edit)
+        self.total_amount_input.textChanged.connect(self._format_total_amount_input)
         self.total_amount_input.editingFinished.connect(self.finalize_total_edit)
 
         # Abono
@@ -516,6 +516,32 @@ class ReservationDialog(QDialog):
         content_layout.addWidget(right_column, 2)
 
         container_layout.addWidget(content_widget)
+
+    def _format_total_amount_input(self):
+        """Filtra y formatea el input de total en tiempo real, manteniendo la posición del cursor."""
+        line_edit = self.total_amount_input
+        line_edit.blockSignals(True)
+
+        text = line_edit.text()
+        cursor_pos = line_edit.cursorPosition()
+        
+        clean_text = "".join(filter(str.isdigit, text))
+        
+        if clean_text:
+            number = int(clean_text)
+            formatted_text = f"{number:,}".replace(",", ".")
+        else:
+            formatted_text = ""
+            
+        line_edit.setText(formatted_text)
+        
+        # Recalcular la posición del cursor
+        length_diff = len(formatted_text) - len(text)
+        new_cursor_pos = cursor_pos + length_diff
+        line_edit.setCursorPosition(max(0, new_cursor_pos))
+        
+        line_edit.blockSignals(False)
+        self.update_due_amount()
 
     def finalize_total_edit(self):
         """Se llama cuando el usuario termina de editar el campo del total."""
