@@ -43,8 +43,8 @@ COLORS = {
 
 # --- Fuentes ---
 FONTS = {
-    "family": "San Francisco",
-    "family_title": "Roboto",
+    "family": "Montserrat",
+    "family_title": "Montserrat",
     "family_fallback": "Arial",
     "size_small": 10,
     "size_normal": 11,

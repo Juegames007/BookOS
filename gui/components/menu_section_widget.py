@@ -79,7 +79,7 @@ class MenuSectionWidget(QWidget):
         layout_finanzas_columna.addWidget(self.search_bar)
 
         opciones_finanzas_main = [
-            {"icon": "vender.png", "text": "  Vender Libro", "action": "Vender Libro"},
+            {"icon": "vender.png", "text": "  Vender", "action": "Vender Libro"},
             {"icon": "ingreso.png", "text": "  Anotar Ingreso", "action": "Reportar Ingreso"},
             {"icon": "gasto.png", "text": "  Anotar Gasto", "action": "Reportar Gasto"},
         ]

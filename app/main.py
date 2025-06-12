@@ -9,9 +9,8 @@ Este módulo es el punto de entrada para ejecutar la aplicación. Se encarga de:
 import sys
 import os
 
-# Asegurarnos de que podemos importar desde la raíz del proyecto
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
+# Añadir el directorio raíz del proyecto al sys.path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
@@ -19,9 +18,11 @@ if project_root not in sys.path:
 import gui.resources.resources_rc
 
 from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtCore import QTimer
 
 from app.dependencies import DependencyFactory                                                      
 from gui.main_window import VentanaGestionLibreria
+from gui.common.utils import load_fonts
 
 def main():
     """
@@ -32,6 +33,13 @@ def main():
     """
     app = QApplication(sys.argv)
 
+    # Cargar fuentes personalizadas
+    load_fonts()
+
+    # El DependencyFactory se encargará de inicializar el DataManager (SQLManager)
+    # cuando se le pida por primera vez.
+    DependencyFactory.get_data_manager()
+    
     # --- Inicializar Dependencias ---
     try:
         print("Inicializando dependencias (esto configurará la base de datos)...")
@@ -50,12 +58,12 @@ def main():
         # Si el error es fatal, descomentar:
         # return 1
 
-    # Lanzar ventana principal
-    ventana_principal = VentanaGestionLibreria()
-    ventana_principal.show()
+    # Crear y mostrar la ventana principal
+    ventana = VentanaGestionLibreria()
+    ventana.show()
     
     # Iniciar el bucle de eventos
     return app.exec()
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    main() 

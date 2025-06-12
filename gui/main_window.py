@@ -26,6 +26,7 @@ from gui.dialogs.reservation_dialog import ReservationDialog
 from gui.dialogs.reservation_options_dialog import ReservationOptionsDialog
 from gui.dialogs.existing_reservations_dialog import ExistingReservationsDialog
 from gui.components.menu_section_widget import MenuSectionWidget
+from gui.dialogs.sell_book_dialog import SellBookDialog
 from features.book_service import BookService
 from features.reservation_service import ReservationService
 from gui.dialogs.search_results_window import SearchResultsWindow
@@ -109,6 +110,9 @@ class VentanaGestionLibreria(QMainWindow):
             dialog = ModifyBookDialog(book_service=self.book_service, parent=self)
             dialog.exec()
         
+        elif accion_limpia == "Vender Libro":
+            self._open_sell_book_dialog()
+
         elif accion_limpia == "Apartar / Ver":
             options_dialog = ReservationOptionsDialog(self)
             options_dialog.new_reservation_requested.connect(self._open_reservation_dialog)
@@ -121,6 +125,17 @@ class VentanaGestionLibreria(QMainWindow):
     def _create_and_exec_reservation_dialog(self):
         dialog = ReservationDialog(self.reservation_service, self)
         dialog.exec()
+
+    def _open_sell_book_dialog(self):
+        blur_effect = QGraphicsBlurEffect()
+        blur_effect.setBlurRadius(15)
+        self.main_menu_widget.setGraphicsEffect(blur_effect)
+
+        try:
+            dialog = SellBookDialog(self)
+            dialog.exec()
+        finally:
+            self.main_menu_widget.setGraphicsEffect(None)
 
     def _open_view_reservations_dialog(self):
         QTimer.singleShot(0, lambda: self._create_and_exec_view_reservations_dialog())
