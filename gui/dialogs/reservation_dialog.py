@@ -144,7 +144,7 @@ class ReservationDialog(QDialog):
         self.manual_total = None    # Si es un float, un descuento manual está activo.
 
         self.current_page = 0
-        self.items_per_page = 4
+        self.items_per_page = 6
 
         self._blur_effect = None
         if self.parent():
@@ -664,6 +664,26 @@ class ReservationDialog(QDialog):
         # Al añadir un nuevo libro, cualquier descuento manual se resetea.
         self.manual_total = None
         self.reserved_items.append(book_data)
+
+        # Mover a la página donde está el nuevo item
+        # Como no hay descuento, reserved_items y displayed_items son equivalentes
+        new_item_group_key = book_data.get('libro_isbn') or book_data.get('id')
+        
+        # Agrupamos la lista de reserva para encontrar el índice del grupo del nuevo item.
+        grouped_items = self._group_items(self.reserved_items)
+        group_keys = list(grouped_items.keys())
+        
+        try:
+            # Encontrar el índice del grupo al que pertenece el nuevo item
+            item_index_in_groups = group_keys.index(new_item_group_key)
+            # Calcular a qué página corresponde ese índice
+            target_page = item_index_in_groups // self.items_per_page
+            self.current_page = target_page
+        except ValueError:
+            # Como fallback, si algo sale mal, simplemente vamos a la última página.
+            total_groups = len(grouped_items)
+            self.current_page = (total_groups - 1) // self.items_per_page if total_groups > 0 else 0
+
         self.update_all_views()
 
     def remove_book_group(self, group_id_to_remove: str):
@@ -778,7 +798,7 @@ class ReservationDialog(QDialog):
                 taken_item.widget().deleteLater()
             # Los espaciadores simplemente se descartan al ser quitados del layout.
 
-        grouped_items = self._get_grouped_items()
+        grouped_items = self._group_items(self.displayed_items)
         
         # Ahora que el layout está limpio (o solo contiene a no_items_label),
         # podemos gestionar la visibilidad y añadir los nuevos items.
@@ -805,7 +825,7 @@ class ReservationDialog(QDialog):
         self.update_navigation()
 
     def update_navigation(self):
-        grouped_items = self._get_grouped_items()
+        grouped_items = self._group_items(self.displayed_items)
         total_groups = len(grouped_items)
 
         if total_groups == 0:
@@ -825,7 +845,7 @@ class ReservationDialog(QDialog):
             self.update_items_display()
 
     def next_page(self):
-        total_groups = len(self._get_grouped_items())
+        total_groups = len(self._group_items(self.displayed_items))
         total_pages = (total_groups - 1) // self.items_per_page + 1
         if self.current_page < total_pages -1:
             self.current_page += 1
@@ -903,10 +923,10 @@ class ReservationDialog(QDialog):
         else:
             QMessageBox.critical(self, "Error", f"No se pudo completar la operación:\n{message}")
 
-    def _get_grouped_items(self):
-        """Agrupa los items de la lista de VISUALIZACIÓN."""
+    def _group_items(self, items_list: list) -> dict:
+        """Agrupa una lista de items por su clave de agrupación (ISBN o ID)."""
         grouped = {}
-        for item in self.displayed_items:
+        for item in items_list:
             # Clave de agrupación: ISBN para libros, ID único para el resto.
             group_key = item.get('libro_isbn') or item.get('id')
             if group_key not in grouped:
