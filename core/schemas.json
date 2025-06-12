@@ -26,7 +26,7 @@
       },
       {
         "nombre": "detalles_venta",
-        "definicion": "(id_detalle_venta INTEGER PRIMARY KEY AUTOINCREMENT, id_venta INTEGER NOT NULL, libro_isbn TEXT NOT NULL, cantidad INTEGER NOT NULL, precio_unitario REAL NOT NULL, FOREIGN KEY (id_venta) REFERENCES ventas (id_venta) ON DELETE CASCADE, FOREIGN KEY (libro_isbn) REFERENCES libros (isbn) ON DELETE CASCADE)"
+        "definicion": "(id_detalle_venta INTEGER PRIMARY KEY AUTOINCREMENT, id_venta INTEGER NOT NULL, libro_isbn TEXT NOT NULL, cantidad INTEGER NOT NULL, precio_unitario REAL NOT NULL, FOREIGN KEY (id_venta) REFERENCES ventas (id_venta) ON DELETE CASCADE)"
       },
       {
         "nombre": "ingresos",

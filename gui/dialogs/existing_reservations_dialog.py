@@ -193,7 +193,7 @@ class ExistingReservationsDialog(QDialog):
         self.is_moving_forward = False
         self.current_reservation_items = []
         self.current_items_page = 0
-        self.items_per_page = 6
+        self.items_per_page = 4
         self.current_reservation_id = None
         self.current_reservation_details = None
         self.needs_list_refresh = False
@@ -243,7 +243,7 @@ class ExistingReservationsDialog(QDialog):
 
     def init_ui(self):
         self.setWindowTitle("Reservas Existentes")
-        self.setMinimumSize(750, 540)
+        self.setMinimumSize(750, 650)
         
         # Nivel 1: Dialogo principal - Fondo más claro
 
@@ -457,6 +457,16 @@ class ExistingReservationsDialog(QDialog):
         line.setStyleSheet("background-color: #CBD5E0; margin-top: 5px; margin-bottom: 5px;")
         panel_layout.addWidget(line)
 
+        # --- Financial Summary Section ---
+        financial_layout = self._create_financial_summary_section(details)
+        panel_layout.addLayout(financial_layout)
+
+        # Separator Line 2
+        line2 = QFrame()
+        line2.setFixedHeight(1)
+        line2.setStyleSheet("background-color: #CBD5E0; margin-top: 5px; margin-bottom: 5px;")
+        panel_layout.addWidget(line2)
+
         # --- Items Section ---
         items_section_layout = QVBoxLayout()
         items_section_layout.setSpacing(10)
@@ -495,11 +505,17 @@ class ExistingReservationsDialog(QDialog):
         for btn in [self.prev_button, self.next_button]:
             btn.setStyleSheet("""
                 QPushButton { 
-                    background-color: #E2E8F0; border: 1px solid #CBD5E0; 
+                    background-color: #DDEBF8;
+                    color: #2C5282;
+                    border: 1px solid #BEE3F8;
                     border-radius: 8px; padding: 8px 12px; font-size: 12px;
                 }
-                QPushButton:hover { background-color: #CBD5E0; }
-                QPushButton:disabled { background-color: #F7FAFC; color: #A0AEC0; border-color: #E2E8F0; }
+                QPushButton:hover { background-color: #BEE3F8; }
+                QPushButton:disabled { 
+                    background-color: #F7FAFC;
+                    color: #A0AEC0; 
+                    border-color: #E2E8F0; 
+                }
             """)
 
         # --- Center Action Buttons ---
@@ -566,17 +582,78 @@ class ExistingReservationsDialog(QDialog):
         
         return widget
 
-    def _create_detail_group_box(self, title, content_widget):
-        frame = QFrame()
-        frame.setFrameShape(QFrame.NoFrame)
-        layout = QVBoxLayout(frame)
-        title_label = QLabel(title.upper())
-        font = QFont(); font.setPointSize(10); font.setWeight(QFont.Weight.Bold);
-        title_label.setFont(font)
-        title_label.setStyleSheet("color: #666;")
+    def _create_financial_info_widget(self, title, value, value_color=None):
+        widget = QWidget()
+        widget.setStyleSheet("background: transparent;")
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        
+        title_label = QLabel(title)
+        title_label.setFont(QFont("Montserrat", 10, QFont.Weight.DemiBold))
+        title_label.setStyleSheet("color: #6B7280;")
+
+        value_label = QLabel(value)
+        value_label.setFont(QFont("Montserrat", 13, QFont.Weight.Bold))
+        style = "color: #1F2937;"
+        if value_color:
+            style = f"color: {value_color};"
+        value_label.setStyleSheet(style)
+        
         layout.addWidget(title_label)
-        layout.addWidget(content_widget)
-        return frame
+        layout.addWidget(value_label)
+        
+        return widget, value_label
+
+    def _create_financial_summary_section(self, details):
+        financial_section_layout = QVBoxLayout()
+        financial_section_layout.setContentsMargins(0, 10, 0, 5)
+        financial_section_layout.setSpacing(15)
+
+        financial_title = QLabel("Resumen Financiero")
+        financial_title.setFont(QFont("Montserrat", 12, QFont.Weight.Bold))
+        financial_title.setStyleSheet("color: #333; background: transparent;")
+        financial_section_layout.addWidget(financial_title)
+
+        amounts_layout = QHBoxLayout()
+        amounts_layout.setSpacing(20)
+
+        total_amount = details.get('monto_total', 0)
+        paid_amount = details.get('monto_abonado', 0)
+        due_amount = total_amount - paid_amount
+
+        total_widget, self.total_value_label = self._create_financial_info_widget("Total", f"${format_price(total_amount)}")
+        paid_widget, self.paid_value_label = self._create_financial_info_widget("Abonado", f"${format_price(paid_amount)}", "#28a745")
+        due_widget, self.due_value_label = self._create_financial_info_widget("Pendiente", f"${format_price(due_amount)}", "#dc3545")
+
+        amounts_layout.addWidget(total_widget, 1)
+        amounts_layout.addWidget(paid_widget, 1)
+        amounts_layout.addWidget(due_widget, 1)
+        financial_section_layout.addLayout(amounts_layout)
+
+        deposit_layout = QHBoxLayout()
+        deposit_layout.setSpacing(10)
+        self.deposit_input = QLineEdit()
+        self.deposit_input.setPlaceholderText("Ingresar abono...")
+        self.deposit_input.setStyleSheet("QLineEdit { color: black; border-radius: 8px; padding: 6px 10px; border: 1px solid #CBD5E0; }")
+        self.deposit_input.textChanged.connect(self._format_deposit_input)
+        
+        deposit_button = QPushButton("Añadir Abono")
+        deposit_button.setCursor(Qt.PointingHandCursor)
+        deposit_button.clicked.connect(self._handle_add_deposit)
+        deposit_button.setStyleSheet("""
+            QPushButton { 
+                background-color: #3182CE; color: white; border: none; 
+                border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #2B6CB0; }
+        """)
+        
+        deposit_layout.addWidget(self.deposit_input, 1)
+        deposit_layout.addWidget(deposit_button)
+        financial_section_layout.addLayout(deposit_layout)
+        
+        return financial_section_layout
 
     def show_list_view(self):
         self.slide_to_widget_index(0)
@@ -695,7 +772,7 @@ class ExistingReservationsDialog(QDialog):
         paid_amount = self.current_reservation_details.get('monto_abonado', 0)
         due_amount = total_amount - paid_amount
 
-        final_payment, ok = QInputDialog.getDouble(self, "Pago Final", f"Monto restante: {format_price(due_amount)}<br>Ingrese el pago final recibido:", 
+        final_payment, ok = QInputDialog.getDouble(self, "Pago Final", f"Monto restante: ${format_price(due_amount)}<br>Ingrese el pago final recibido:", 
                                                    due_amount, 0, 10000000, 2)
         if ok:
             success, message = self.reservation_service.convert_reservation_to_sale(
@@ -740,6 +817,80 @@ class ExistingReservationsDialog(QDialog):
             self.show_list_view()
         else:
             QMessageBox.critical(self, "Error", f"No se pudo completar la operación:\n{message}")
+
+    def _format_deposit_input(self):
+        """Filtra y formatea el input de abono en tiempo real con separadores de miles."""
+        self.deposit_input.blockSignals(True)
+        
+        text = self.deposit_input.text()
+        cursor_position = self.deposit_input.cursorPosition()
+        
+        clean_text = "".join(filter(str.isdigit, text))
+        
+        if clean_text:
+            number = int(clean_text)
+            formatted_text = f"{number:,}".replace(",", ".")
+        else:
+            formatted_text = ""
+            
+        self.deposit_input.setText(formatted_text)
+        
+        length_diff = len(formatted_text) - len(text)
+        new_cursor_pos = cursor_position + length_diff
+        self.deposit_input.setCursorPosition(max(0, new_cursor_pos))
+        
+        self.deposit_input.blockSignals(False)
+
+    def _handle_add_deposit(self):
+        if not self.current_reservation_id:
+            return
+
+        deposit_text = self.deposit_input.text().strip().replace(".", "").replace(",", "")
+        if not deposit_text:
+            QMessageBox.warning(self, "Monto Vacío", "Por favor, ingrese un monto para el abono.")
+            return
+
+        try:
+            deposit_amount = float(deposit_text)
+        except ValueError:
+            QMessageBox.warning(self, "Monto Inválido", "Por favor, ingrese un número válido.")
+            return
+
+        if deposit_amount <= 0:
+            QMessageBox.warning(self, "Monto Inválido", "El monto del abono debe ser positivo.")
+            return
+            
+        current_total = self.current_reservation_details.get('monto_total', 0)
+        current_paid = self.current_reservation_details.get('monto_abonado', 0)
+        current_due = current_total - current_paid
+        
+        if deposit_amount > current_due:
+            QMessageBox.warning(self, "Monto Excedido", f"El abono no puede ser mayor que el saldo pendiente (${format_price(current_due)}).")
+            return
+
+        reply = QMessageBox.question(self, "Confirmar Abono",
+                                     f"<b>¡Atención!</b><br><br>¿Estás seguro de que deseas añadir un abono de <b>${format_price(deposit_amount)}</b> a esta reserva?<br><br>Esta acción afectará los registros financieros.",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.No:
+            return
+
+        success, message = self.reservation_service.add_deposit_to_reservation(self.current_reservation_id, deposit_amount)
+
+        if success:
+            QMessageBox.information(self, "Éxito", "Abono añadido con éxito.")
+            
+            new_paid_amount = current_paid + deposit_amount
+            self.current_reservation_details['monto_abonado'] = new_paid_amount
+            new_due_amount = current_due - deposit_amount
+
+            self.paid_value_label.setText(f"${format_price(new_paid_amount)}")
+            self.due_value_label.setText(f"${format_price(new_due_amount)}")
+            self.deposit_input.clear()
+            
+            self.needs_list_refresh = True
+        else:
+            QMessageBox.critical(self, "Error", f"No se pudo añadir el abono:\n{message}")
 
     def load_reservations(self):
         reservations = self.reservation_service.get_all_reservations()

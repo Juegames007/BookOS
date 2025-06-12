@@ -10,6 +10,8 @@ from PySide6.QtCore import Qt, QPoint, Signal, QSize, QTimer
 import uuid
 from typing import List
 
+from .price_input_dialog import PriceInputDialog
+
 # Asumiendo que los estilos y dependencias están accesibles
 from gui.common.styles import FONTS, COLORS
 from features.reservation_service import ReservationService
@@ -623,14 +625,16 @@ class ReservationDialog(QDialog):
         self.add_book_item(promo_data)
 
     def add_disc_item(self):
-        price, ok = QInputDialog.getInt(self, "Precio del Disco", "Ingrese el precio del disco:", 10000, 0, 1000000, 100)
-        if ok:
-            disc_data = {
-                'id': f"disc_{uuid.uuid4()}",
-                'descripcion': 'Disco',
-                'precio_venta': price
-            }
-            self.add_book_item(disc_data)
+        dialog = PriceInputDialog(self, title="Precio del Disco")
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            price = dialog.get_price()
+            if price > 0:
+                disc_data = {
+                    'id': f"disc_{uuid.uuid4()}",
+                    'descripcion': 'Disco',
+                    'precio_venta': price
+                }
+                self.add_book_item(disc_data)
 
     def get_base_total(self):
         """Calcula el total a partir de los precios originales en la lista maestra."""

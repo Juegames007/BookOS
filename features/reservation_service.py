@@ -240,6 +240,7 @@ class ReservationService:
         base_query = """
             SELECT
                 r.id_reserva,
+                r.id_cliente,
                 r.monto_total,
                 r.notas,
                 r.fecha_creacion as fecha_reserva,
@@ -321,10 +322,12 @@ class ReservationService:
             if not details:
                 return False, "La reserva no existe."
 
-            # 1. Revertir el inventario
+            # 1. Revertir el inventario solo de libros físicos
             for book in details['libros']:
-                update_inv_query = "UPDATE inventario SET cantidad = cantidad + ? WHERE libro_isbn = ?"
-                self.data_manager.execute_query(update_inv_query, (book['cantidad'], book['libro_isbn']))
+                isbn = book.get('libro_isbn', '')
+                if not (isbn.startswith('promo_') or isbn.startswith('disc_')):
+                    update_inv_query = "UPDATE inventario SET cantidad = cantidad + ? WHERE libro_isbn = ?"
+                    self.data_manager.execute_query(update_inv_query, (book['cantidad'], isbn))
 
             # 2. Manejar la contabilidad del abono
             paid_amount = details.get('monto_abonado', 0)
@@ -360,12 +363,13 @@ class ReservationService:
             if not details:
                 return False, "La reserva no existe."
             
-            client_id_query = "SELECT id_cliente FROM reservas WHERE id_reserva = ?"
-            client_id = self.data_manager.fetch_query(client_id_query, (reservation_id,))[0]['id_cliente']
-
-            # 1. Crear la entrada en la tabla 'ventas'
+            # 1. Crear la entrada principal en la tabla 'ventas'
             total_amount = details['monto_total']
             notes = details.get('notas', '')
+            client_id = details.get('id_cliente')
+            if not client_id:
+                return False, "No se pudo encontrar el ID del cliente para la venta."
+
             venta_query = "INSERT INTO ventas (id_cliente, monto_total, notas, fecha_venta, id_reserva_origen) VALUES (?, ?, ?, datetime('now'), ?)"
             cursor = self.data_manager.execute_query(venta_query, (client_id, total_amount, notes, reservation_id))
             
@@ -373,21 +377,35 @@ class ReservationService:
                 return False, "Error al crear el registro de la venta."
             id_venta = cursor.lastrowid
 
-            # 2. Registrar el pago final como un ingreso (si lo hay)
-            if final_payment > 0:
-                ingreso_query = "INSERT INTO ingresos (monto, concepto, id_venta, id_reserva) VALUES (?, ?, ?, ?)"
-                concepto = f"Pago final para completar reserva #{reservation_id} (Venta #{id_venta})"
-                self.data_manager.execute_query(ingreso_query, (final_payment, concepto, id_venta, reservation_id))
+            # 2. Anular los abonos previos registrando un egreso compensatorio
+            paid_amount = details.get('monto_abonado', 0)
+            if paid_amount > 0:
+                egreso_query = "INSERT INTO egresos (monto, concepto, id_reserva) VALUES (?, ?, ?)"
+                concepto_egreso = f"Abono de reserva #{reservation_id} transferido a venta #{id_venta}"
+                self.data_manager.execute_query(egreso_query, (paid_amount, concepto_egreso, reservation_id))
 
-            # 3. Mover los detalles de 'detalles_reserva' a 'detalles_venta'
+            # 3. Registrar cada artículo de la venta y su ingreso individual
             for book in details['libros']:
+                # Crear el detalle de la venta
                 detalle_query = "INSERT INTO detalles_venta (id_venta, libro_isbn, cantidad, precio_unitario) VALUES (?, ?, ?, ?)"
-                self.data_manager.execute_query(detalle_query, (id_venta, book['libro_isbn'], book['cantidad'], book['precio_unitario']))
-
+                detalle_cursor = self.data_manager.execute_query(detalle_query, (id_venta, book['libro_isbn'], book['cantidad'], book['precio_unitario']))
+                
+                if not detalle_cursor or not detalle_cursor.lastrowid:
+                    continue # O manejar el error de forma más robusta
+                
+                id_detalle_venta = detalle_cursor.lastrowid
+                
+                # Crear el ingreso asociado a ese detalle específico
+                item_total = book['cantidad'] * book['precio_unitario']
+                ingreso_query = "INSERT INTO ingresos (monto, concepto, id_venta, id_detalle_venta) VALUES (?, ?, ?, ?)"
+                concepto_ingreso = f"Venta de: {book.get('titulo', book['libro_isbn'])}"
+                self.data_manager.execute_query(ingreso_query, (item_total, concepto_ingreso, id_venta, id_detalle_venta))
+                
             # 4. Actualizar estado de la reserva original
             update_res_query = "UPDATE reservas SET estado = 'COMPLETADO', fecha_actualizacion = datetime('now') WHERE id_reserva = ?"
             self.data_manager.execute_query(update_res_query, (reservation_id,))
 
             return True, f"Venta #{id_venta} creada a partir de la reserva."
         except Exception as e:
+            # Considerar registrar el error de forma más detallada
             return False, f"Error al convertir la reserva en venta: {str(e)}" 

@@ -293,7 +293,6 @@ class BookFormDialog(QDialog):
         elif self.mode == 'MODIFY':
             self.title_label_internal.setText("Modificar Libro")
             self.guardar_button.setText("Actualizar Libro")
-            self.isbn_input.returnPressed.connect(lambda: self.isbn_input.setReadOnly(True))
 
     def buscar_isbn(self):
         isbn = self.isbn_input.text().strip()
