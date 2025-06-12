@@ -1,4 +1,4 @@
-from PySide6.QtGui import QFontDatabase
+from PySide6.QtGui import QFontDatabase, QIcon
 import os
 
 def format_price(price: float) -> str:
@@ -10,6 +10,12 @@ def format_price(price: float) -> str:
         return f"{int(price):,}".replace(",", ".")
     except (ValueError, TypeError):
         return "0"
+
+def get_icon_path(icon_name: str) -> str:
+    """Obtiene la ruta completa de un icono en la carpeta de imágenes."""
+    # Navega desde gui/common -> gui/ -> project_root/ -> app/imagenes
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return os.path.join(base_dir, 'app', 'imagenes', icon_name)
 
 def load_fonts():
     """Carga las fuentes personalizadas desde la carpeta de recursos."""

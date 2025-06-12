@@ -29,6 +29,7 @@ from gui.components.menu_section_widget import MenuSectionWidget
 from gui.dialogs.sell_book_dialog import SellBookDialog
 from features.book_service import BookService
 from features.reservation_service import ReservationService
+from features.sell_service import SellService
 from gui.dialogs.search_results_window import SearchResultsWindow
 from core.sqlmanager import SQLManager
 
@@ -46,6 +47,7 @@ class VentanaGestionLibreria(QMainWindow):
         book_info_fetcher = DependencyFactory.get_book_info_service()
         self.book_service = BookService(data_manager, book_info_fetcher)
         self.reservation_service = ReservationService(data_manager)
+        self.sell_service = SellService(data_manager)
 
         target_width, target_height = 1366, 768
         try:
@@ -132,7 +134,7 @@ class VentanaGestionLibreria(QMainWindow):
         self.main_menu_widget.setGraphicsEffect(blur_effect)
 
         try:
-            dialog = SellBookDialog(self)
+            dialog = SellBookDialog(self.book_service, self.sell_service, self)
             dialog.exec()
         finally:
             self.main_menu_widget.setGraphicsEffect(None)

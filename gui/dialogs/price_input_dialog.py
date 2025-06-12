@@ -1,161 +1,175 @@
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, QPushButton,
-    QFrame, QGraphicsBlurEffect
+    QFrame, QGraphicsBlurEffect, QLineEdit, QDialogButtonBox
 )
 from PySide6.QtGui import QFont, QMouseEvent
 from PySide6.QtCore import Qt, QPoint
 
-from gui.common.styles import FONTS
+from gui.common.styles import FONTS, STYLES
 
 class PriceInputDialog(QDialog):
-    def __init__(self, parent=None, title="Ingresar Precio", value=10000, min_val=0, max_val=1000000, step=100):
+    def __init__(self, parent=None, title="Ingresar Valor", show_quantity=False, default_price=0, default_quantity=1):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-        self._blur_effect = None
-        if self.parent():
-            self._blur_effect = QGraphicsBlurEffect()
-            self._blur_effect.setBlurRadius(15)
-            self._blur_effect.setEnabled(False)
-            target_widget = self.parent().centralWidget() if hasattr(self.parent(), 'centralWidget') and self.parent().centralWidget() else self.parent()
-            if target_widget and hasattr(target_widget, 'setGraphicsEffect'):
-                target_widget.setGraphicsEffect(self._blur_effect)
+        self._price = default_price
+        self._quantity = default_quantity
+        self._last_price_text = "" # Para arreglar bug del cursor
 
         self.setModal(True)
+        self.setFixedWidth(350)
         self._drag_pos = QPoint()
 
-        self._setup_ui(title, value, min_val, max_val, step)
+        self._setup_ui(title, show_quantity, default_price, default_quantity)
         self.price_input.setFocus()
+        self._format_price_input() # Formato inicial
         
-
-    def _setup_ui(self, title, value, min_val, max_val, step):
+    def _setup_ui(self, title, show_quantity, default_price, default_quantity):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        container_frame = QFrame(self)
+        container_frame = QFrame()
         container_frame.setObjectName("containerFrame")
         container_frame.setStyleSheet("""
-            QFrame#containerFrame {
-                background-color: rgba(255, 255, 255, 0.85);
-                border: 1px solid rgba(255, 255, 255, 0.3);
-                border-radius: 16px;
-                padding: 25px;
+            #containerFrame {
+                background-color: #ECEFF1;
+                border-radius: 15px;
+                border: 1px solid #CFD8DC;
             }
         """)
         
         frame_layout = QVBoxLayout(container_frame)
-        frame_layout.setSpacing(10)
+        frame_layout.setSpacing(15)
+        frame_layout.setContentsMargins(20, 15, 20, 20)
 
         self.title_label = QLabel(title)
         self.title_label.setFont(QFont(FONTS.get("family", "Arial"), 16, QFont.Weight.Bold))
-        self.title_label.setStyleSheet("color: #000000; background: transparent;")
+        self.title_label.setStyleSheet("color: #263238; background: transparent;")
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         frame_layout.addWidget(self.title_label)
 
-        self.price_input = QSpinBox()
-        self.price_input.setRange(min_val, max_val)
-        self.price_input.setSingleStep(step)
-        self.price_input.setValue(value)
-        self.price_input.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
-        self.price_input.setSuffix("")
-        self.price_input.setFixedHeight(38)
+        input_layout = QHBoxLayout()
+        input_layout.setSpacing(10)
+
+        price_label = QLabel("Precio:")
+        price_label.setStyleSheet("color: #37474F; font-size: 14px;")
+        self.price_input = QLineEdit()
         self.price_input.setStyleSheet("""
-            QSpinBox {
-                background-color: rgba(255, 255, 255, 0.7); 
-                border: 1px solid rgba(0, 0, 0, 0.1);
-                border-radius: 8px; padding: 0px 10px; 
-                font-size: 14px; color: #000000;
-            }
-            QSpinBox:focus {
-                border: 1.5px solid rgba(74, 144, 226, 0.9);
+            QLineEdit {
+                background-color:rgb(255, 255, 255);
+                color:rgb(0, 0, 0);
+                border: 1px solid rgb(53, 67, 75);
+                border-radius: 5px;
+                padding: 8px 6px;
+                font-size: 14px;
             }
         """)
-        frame_layout.addWidget(self.price_input)
+        self.price_input.textChanged.connect(self._format_price_input)
+        self.price_input.setText(str(default_price))
+        self.price_input.setFixedWidth(100)
 
-        button_layout = QHBoxLayout()
-        button_layout.setContentsMargins(0, 10, 0, 0)
-        button_layout.setSpacing(10)
-
-        self.ok_button = QPushButton("✓ OK")
-        self.ok_button.setAutoDefault(True)
-        self.ok_button.clicked.connect(self.accept)
-        
-        self.cancel_button = QPushButton("⨉ Cancelar")
-        self.cancel_button.setAutoDefault(False)
-        self.cancel_button.clicked.connect(self.reject)
-
-        button_style = """
-            QPushButton { 
-                background-color: rgba(0, 0, 0, 0.05); 
-                border: 1px solid rgba(0, 0, 0, 0.1); 
-                border-radius: 8px; color: #000; font-size: 12px; 
-                padding: 8px 12px;
-                font-weight: 500;
-                min-width: 80px;
-            } 
-            QPushButton:hover { background-color: rgba(0, 0, 0, 0.1); }
-            QPushButton:pressed { background-color: rgba(0, 0, 0, 0.07); }
-        """
-        ok_button_style = """
-            QPushButton { 
-                background-color: #4A90E2; 
-                color: white;
-                border: none;
-                border-radius: 8px; font-size: 12px; 
-                padding: 8px 12px;
-                font-weight: bold;
-                min-width: 80px;
+        self.quantity_label = QLabel("Cantidad:")
+        self.quantity_label.setStyleSheet("color: #37474F; font-size: 14px;")
+        self.quantity_spinbox = QSpinBox()
+        self.quantity_spinbox.setButtonSymbols(QSpinBox.NoButtons)
+        self.quantity_spinbox.setMinimum(1)
+        self.quantity_spinbox.setMaximum(100)
+        self.quantity_spinbox.setValue(default_quantity)
+        self.quantity_spinbox.setStyleSheet("""
+            QSpinBox {
+                padding: 8px 4px;
+                border: 1px solid #B0BEC5; border-radius: 5px;
+                background-color: white; color: black;
+                text-align: center;
+                font-size: 14px;
             }
-            QPushButton:hover { background-color: #357ABD; }
-            QPushButton:pressed { background-color: #2E6DA4; }
-        """
-        self.ok_button.setStyleSheet(ok_button_style)
-        self.cancel_button.setStyleSheet(button_style)
-        
-        self.ok_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.cancel_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        """)
+        self.quantity_spinbox.setFixedWidth(40)
 
-        button_layout.addStretch()
-        button_layout.addWidget(self.ok_button)
-        button_layout.addWidget(self.cancel_button)
+        input_layout.addStretch()
+        input_layout.addWidget(price_label)
+        input_layout.addWidget(self.price_input)
+        input_layout.addSpacing(15)
+        input_layout.addWidget(self.quantity_label)
+        input_layout.addWidget(self.quantity_spinbox)
+        input_layout.addStretch()
+
+        self.quantity_label.setVisible(show_quantity)
+        self.quantity_spinbox.setVisible(show_quantity)
         
-        frame_layout.addLayout(button_layout)
+        frame_layout.addLayout(input_layout)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        button_box.setStyleSheet(f"QPushButton {{ min-width: 80px; padding: 8px; }}")
+        ok_button = button_box.button(QDialogButtonBox.Ok)
+        ok_button.setStyleSheet(STYLES['button_success_full'])
+        cancel_button = button_box.button(QDialogButtonBox.Cancel)
+        cancel_button.setStyleSheet(STYLES['button_danger_full'])
+
+        frame_layout.addWidget(button_box, alignment=Qt.AlignCenter)
         main_layout.addWidget(container_frame)
         self.adjustSize()
+    
+    def _format_price_input(self):
+        line_edit = self.price_input
+        text = line_edit.text()
+        cursor_pos = line_edit.cursorPosition()
 
-    def get_price(self):
-        return self.price_input.value()
+        clean_text = "".join(filter(str.isdigit, text))
 
-    def _enable_blur(self, enable: bool):
-        if not self._blur_effect:
-            return
-            
-        target_widget = self.parent()
-        if not target_widget:
-            return
-
-        if enable:
-            if target_widget.graphicsEffect() != self._blur_effect:
-                target_widget.setGraphicsEffect(self._blur_effect)
-            self._blur_effect.setEnabled(True)
+        if not clean_text:
+            self._price = 0
+            formatted_text = ""
         else:
-            if target_widget.graphicsEffect() == self._blur_effect:
-                self._blur_effect.setEnabled(False)
-                target_widget.setGraphicsEffect(None)
+            value = int(clean_text)
+            self._price = value
+            formatted_text = f"{value:,}".replace(",", ".")
+
+        if text != formatted_text:
+            line_edit.blockSignals(True)
+            line_edit.setText(formatted_text)
+            line_edit.blockSignals(False)
+
+            text_before_cursor = text[:cursor_pos]
+            separators_before_cursor_old = text_before_cursor.count('.')
+            
+            new_text_before_cursor_part = formatted_text[:len(text_before_cursor)]
+            separators_before_cursor_new = new_text_before_cursor_part.count('.')
+
+            len_diff = len(formatted_text) - len(text)
+            cursor_adjustment = len_diff - (separators_before_cursor_new - separators_before_cursor_old)
+            
+            new_cursor_pos = cursor_pos + cursor_adjustment
+            
+            if len(clean_text) > 0 and int(clean_text) == 0 and len(text) > 1 :
+                 new_cursor_pos = cursor_pos
+
+            line_edit.setCursorPosition(max(0, new_cursor_pos))
+
+    def accept(self):
+        price_text = "".join(filter(str.isdigit, self.price_input.text()))
+        self._price = int(price_text) if price_text else 0
+        self._quantity = self.quantity_spinbox.value()
         
-        target_widget.update()
+        if self._price <= 0:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Precio Inválido", "El precio del artículo debe ser mayor que cero.")
+            return
+
+        super().accept()
+
+    def get_values(self):
+        return self._price, self._quantity
 
     def exec(self):
-        self._recenter_dialog()
-        self._enable_blur(True)
-        result = super().exec()
-        self._enable_blur(False)
-        return result
+        return super().exec()
 
     def reject(self):
-        self._enable_blur(False)
         super().reject()
 
     def _recenter_dialog(self):
@@ -166,10 +180,12 @@ class PriceInputDialog(QDialog):
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            event.accept()
 
     def mouseMoveEvent(self, event: QMouseEvent):
-        if event.buttons() == Qt.MouseButton.LeftButton and not self._drag_pos.isNull():
+        if event.buttons() == Qt.MouseButton.LeftButton:
             self.move(event.globalPosition().toPoint() - self._drag_pos)
+            event.accept()
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         self._drag_pos = QPoint() 
