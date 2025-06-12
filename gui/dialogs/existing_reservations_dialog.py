@@ -365,6 +365,15 @@ class ExistingReservationsDialog(QDialog):
         self.current_reservation_items = details.get('libros', [])
         self.current_items_page = 0
 
+        # Ajustar altura para la vista de detalles
+        num_items = len(self.current_reservation_items)
+        items_in_view = min(num_items, self.items_per_page)
+        rows = (items_in_view + 1) // 2 
+        
+        # Base height: header + financial summary + buttons, etc.
+        # Item height: height of one ReservedItemWidget + spacing
+        self._adjust_dialog_height(item_count=rows, item_height=85, base_height=470, max_height=170)
+
         self.detail_view_widget = self._build_detail_widget(details)
         
         new_widget_index = self.stacked_widget.addWidget(self.detail_view_widget)
@@ -657,6 +666,13 @@ class ExistingReservationsDialog(QDialog):
 
     def show_list_view(self):
         self.slide_to_widget_index(0)
+        # Re-ajustar al volver a la lista
+        self._adjust_dialog_height(
+            item_count=self.list_widget.count(), 
+            item_height=87, 
+            base_height=200, 
+            max_height=435
+        )
 
     def slide_to_widget_index(self, index):
         if self.stacked_widget.currentIndex() == index or self.slide_in_anim.state() == QPropertyAnimation.Running:
@@ -906,10 +922,27 @@ class ExistingReservationsDialog(QDialog):
             item.setSizeHint(widget.sizeHint())
             self.list_widget.addItem(item)
             self.list_widget.setItemWidget(item, widget)
+            
+        # Ajustar altura para la lista de reservas
+        # Base height: title bar + container paddings
+        # Item height: height of one ReservationItemWidget + spacing
+        self._adjust_dialog_height(item_count=len(reservations), item_height=87, base_height=200, max_height=435)
 
         if self.list_widget.count() > 0:
             self.list_widget.setCurrentRow(0)
             self.list_widget.setFocus()
+
+    def _recenter_dialog(self):
+        if self.parentWidget():
+            p_geom = self.parentWidget().geometry()
+            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
+
+    def _adjust_dialog_height(self, item_count, item_height, base_height, max_height):
+        content_height = min(item_count * item_height, max_height)
+        new_height = base_height + content_height
+        self.setFixedHeight(new_height)
+        self.adjustSize()
+        self._recenter_dialog()
 
     def closeEvent(self, event):
         self.accept()

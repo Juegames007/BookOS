@@ -316,9 +316,7 @@ class ReservationDialog(QDialog):
         self.paid_amount_input = QLineEdit()
         self.paid_amount_input.setPlaceholderText("$0")
         self.paid_amount_input.setStyleSheet(input_style)
-        self.paid_amount_input.textChanged.connect(lambda text: self._handle_price_text_change(self.paid_amount_input, text))
-        self.paid_amount_input.editingFinished.connect(self.format_paid_amount_edit)
-        self.paid_amount_input.textChanged.connect(self.update_due_amount)
+        self.paid_amount_input.textChanged.connect(self._format_paid_amount_input)
 
         # Saldo Pendiente
         due_label = QLabel("Saldo Pendiente:")
@@ -559,52 +557,31 @@ class ReservationDialog(QDialog):
         
         self.update_all_views()
 
-    def _on_total_manually_changed(self, text):
-        # Esta función ahora solo limpia el input, no cambia el estado.
-        # La lógica de estado se maneja en finalize_total_edit.
-        if not self.total_amount_input.hasFocus():
-            return
-        raw_text = ''.join(filter(str.isdigit, text))
-        if text != raw_text:
-            self.total_amount_input.blockSignals(True)
-            self.total_amount_input.setText(raw_text)
-            self.total_amount_input.blockSignals(False)
-        self.update_due_amount()
-
-    def format_paid_amount_edit(self):
-        raw_text = ''.join(filter(str.isdigit, self.paid_amount_input.text()))
-        value = float(raw_text) if raw_text else 0.0
-        self.paid_amount_input.blockSignals(True)
-        self.paid_amount_input.setText(format_price_with_thousands_separator(value))
-        self.paid_amount_input.blockSignals(False)
-        self.update_due_amount()
-
-    def _format_line_edit_price(self, line_edit: QLineEdit, is_total_field=False):
-        # Este método ahora puede ser simplificado o eliminado si la nueva lógica lo cubre.
-        # Por ahora lo mantenemos para el campo de abono, aunque su lógica está duplicada.
-        current_text = line_edit.text()
-        raw_number_str = "".join(filter(str.isdigit, current_text))
-        value = int(raw_number_str) if raw_number_str else 0
-        
-        formatted_price = format_price_with_thousands_separator(value)
-        
+    def _format_paid_amount_input(self):
+        """Filtra y formatea el input de abono en tiempo real, manteniendo la posición del cursor."""
+        line_edit = self.paid_amount_input
         line_edit.blockSignals(True)
-        line_edit.setText(formatted_price)
-        line_edit.blockSignals(False)
 
-        if is_total_field:
-            if not self.manual_total:
-                self.manual_total = value
-            self.update_due_amount()
+        text = line_edit.text()
+        cursor_pos = line_edit.cursorPosition()
+        
+        clean_text = "".join(filter(str.isdigit, text))
+        
+        if clean_text:
+            number = int(clean_text)
+            formatted_text = f"{number:,}".replace(",", ".")
+        else:
+            formatted_text = ""
             
-    def _handle_price_text_change(self, line_edit: QLineEdit, text: str):
-        if not line_edit.hasFocus():
-            return
-        raw_text = ''.join(filter(str.isdigit, text))
-        if text != raw_text:
-            line_edit.blockSignals(True)
-            line_edit.setText(raw_text)
-            line_edit.blockSignals(False)
+        line_edit.setText(formatted_text)
+        
+        # Recalcular la posición del cursor
+        length_diff = len(formatted_text) - len(text)
+        new_cursor_pos = cursor_pos + length_diff
+        line_edit.setCursorPosition(max(0, new_cursor_pos))
+        
+        line_edit.blockSignals(False)
+        self.update_due_amount()
 
     def add_item_from_input(self):
         isbn = self.isbn_input.text().strip()
@@ -884,9 +861,28 @@ class ReservationDialog(QDialog):
             QMessageBox.warning(self, "Abono Requerido", "No es posible crear una reserva sin un abono inicial.")
             return
 
-        client_id = self.reservation_service.get_or_create_client(client_name, client_phone)
+        client_lookup = self.reservation_service.get_or_create_client(client_name, client_phone)
+        status = client_lookup.get("status")
+        client_id = client_lookup.get("client_id")
+
+        if status == 'error':
+            QMessageBox.critical(self, "Error de Cliente", client_lookup.get("message", "Ocurrió un error desconocido."))
+            return
+        
+        if status == 'conflict':
+            existing_name = client_lookup.get('existing_name', 'N/A')
+            reply = QMessageBox.question(self, "Conflicto de Cliente",
+                                         f"El teléfono <b>{client_phone}</b> ya está registrado a nombre de <b>{existing_name}</b>.<br><br>"
+                                         "¿Desea crear la reserva para el cliente existente? "
+                                         "Si elige 'No', por favor corrija el nombre o el teléfono.",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                         QMessageBox.StandardButton.Yes)
+            if reply == QMessageBox.StandardButton.No:
+                self.client_name_input.setFocus()
+                return
+
         if client_id is None:
-            QMessageBox.critical(self, "Error de Cliente", "No se pudo crear o encontrar el cliente.")
+            QMessageBox.critical(self, "Error de Cliente", "No se pudo obtener un ID de cliente válido.")
             return
 
         if paid_amount > final_total:

@@ -54,30 +54,42 @@ class ReservationService:
         else:
             return {"status": "encontrado_multiple", "items": available_items}
 
-    def get_or_create_client(self, nombre: str, telefono: str) -> Optional[int]:
+    def get_or_create_client(self, nombre: str, telefono: str) -> Dict[str, Any]:
         """
-        Busca un cliente por su número de teléfono. Si no existe, lo crea.
-
-        :param nombre: Nombre del cliente.
-        :param telefono: Teléfono del cliente (usado como identificador único).
-        :return: El ID del cliente (existente o nuevo), o None si hay un error.
+        Busca un cliente por teléfono. Si existe y el nombre es diferente, reporta un conflicto.
+        Si no existe, crea uno nuevo.
+        :return: Un diccionario con 'status' ('ok', 'conflict', 'error') y datos relevantes.
         """
         try:
-            # Primero, intentar encontrar el cliente
-            find_query = "SELECT id_cliente FROM clientes WHERE telefono = ?"
+            find_query = "SELECT id_cliente, nombre FROM clientes WHERE telefono = ?"
             result = self.data_manager.fetch_query(find_query, (telefono,))
-            if result:
-                return result[0]['id_cliente']
 
-            # Si no se encuentra, crearlo
-            insert_query = "INSERT INTO clientes (nombre, telefono) VALUES (?, ?)"
-            cursor = self.data_manager.execute_query(insert_query, (nombre, telefono))
-            if cursor and cursor.lastrowid is not None:
-                return cursor.lastrowid
-            return None
-        except Exception:
-            # Considerar registrar el error
-            return None
+            if result:
+                client_id = result[0]['id_cliente']
+                existing_name = result[0]['nombre']
+                
+                if existing_name.lower() != nombre.lower():
+                    # Conflicto: mismo teléfono, diferente nombre.
+                    return {
+                        "status": "conflict",
+                        "client_id": client_id,
+                        "existing_name": existing_name
+                    }
+                else:
+                    # Coincidencia exacta, todo en orden.
+                    return {"status": "ok", "client_id": client_id}
+            else:
+                # El cliente no existe, lo creamos.
+                insert_query = "INSERT INTO clientes (nombre, telefono) VALUES (?, ?)"
+                cursor = self.data_manager.execute_query(insert_query, (nombre, telefono))
+                if cursor and cursor.lastrowid:
+                    return {"status": "ok", "client_id": cursor.lastrowid}
+                else:
+                    return {"status": "error", "message": "No se pudo crear el nuevo cliente."}
+        
+        except Exception as e:
+            print(f"Error en get_or_create_client: {e}")
+            return {"status": "error", "message": f"Error de base de datos: {e}"}
 
     def create_reservation(self, client_id: int, book_items: List[Dict], total_amount: float, paid_amount: float, notes: str = "") -> Tuple[bool, str]:
         """
@@ -101,10 +113,15 @@ class ReservationService:
                 return False, "Error al crear el registro de la reserva."
             
             id_reserva = cursor.lastrowid
+            
+            # Obtener el nombre del cliente para el concepto del ingreso
+            client_name_query = "SELECT nombre FROM clientes WHERE id_cliente = ?"
+            client_result = self.data_manager.fetch_query(client_name_query, (client_id,))
+            client_name = client_result[0]['nombre'] if client_result else "Cliente Desconocido"
 
             # 2. Registrar el abono inicial como un ingreso
             ingreso_query = "INSERT INTO ingresos (monto, concepto, id_reserva) VALUES (?, ?, ?)"
-            concepto_ingreso = f"Abono inicial para reserva #{id_reserva}"
+            concepto_ingreso = f"Abono inicial de {client_name} para reserva #{id_reserva}"
             self.data_manager.execute_query(ingreso_query, (paid_amount, concepto_ingreso, id_reserva))
 
             # 3. Procesar inventario y detalles de la reserva
