@@ -37,7 +37,7 @@ class SellBookDialog(QDialog):
         title_label = QLabel("Vender Artículos")
         title_font = QFont(FONTS["family_title"], FONTS["size_large_title"], QFont.Weight.Bold)
         title_label.setFont(title_font)
-        title_label.setStyleSheet(f"color: {COLORS['text_primary']}; background-color: transparent;")
+        title_label.setStyleSheet(f"color: {COLORS['text_primary']}; background-color: transparent; margin-top: 22px;")
         title_label.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
         
         content_layout.addWidget(title_label)
