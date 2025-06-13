@@ -40,6 +40,8 @@ COLORS = {
     "border_focus": "#3498db",
     "border_black" : "#b7babd",
     
+    "input_background": "rgba(255, 255, 255, 100)",
+
     "accent_purple": "#6D28D9",
     "accent_purple_hover": "#5B21B6",
     "accent_purple_pressed": "#4C1D95",
@@ -195,6 +197,25 @@ STYLES = {
         }}
     """,
 
+    "button_tertiary_full": f"""
+        QPushButton {{
+            background-color: rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            color: #000;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 5px 10px;
+        }}
+        QPushButton:hover {{
+            background-color: rgba(0, 0, 0, 0.08);
+        }}
+        QPushButton:disabled {{
+            background-color: rgba(0, 0, 0, 0.02);
+            color: rgba(0, 0, 0, 0.3);
+        }}
+    """,
+
     "main_menu_card_style": f"""
         QFrame#mainMenuCard {{
         background-color: rgba(255, 255, 255, 89); /* Ajustado para opacidad 0.35 */
@@ -213,11 +234,25 @@ STYLES = {
 
     "line_edit_style": f"""
         QLineEdit {{
-            color: {COLORS['text_primary']};
-            border: 1px solid #bdc3c7;
+            background-color: {COLORS['input_background']};
+            border: 1px solid {COLORS['border_medium']};
             border-radius: 8px;
-            padding: 5px 15px;
-            background-color: #FFFFFF;
+            padding: 10px 15px;
+            font-size: {FONTS['size_normal']}px;
+            color: {COLORS['text_primary']};
+        }}
+        QLineEdit:focus {{
+            border: 1px solid {COLORS['border_focus']};
+        }}
+    """,
+
+    "line_edit_total_style": f"""
+        QLineEdit {{
+            color: {COLORS['text_primary']};
+            background-color: white;
+            border: 1px solid {COLORS['border_medium']};
+            border-radius: 8px;
+            padding-right: 10px;
         }}
         QLineEdit:focus {{
             border: 2px solid {COLORS['border_focus']};
