@@ -466,15 +466,23 @@ class SellBookDialog(QDialog):
             row, col = divmod(i, 2)
             self.items_layout.addWidget(placeholder, row, col)
 
+        self.items_container.setVisible(len(items_to_display) > 0)
+        self.footer_container.setVisible(len(items_to_display) > 0)
+
     def _group_items(self, items_list):
+        """Agrupa los artículos por ID, sumando las cantidades."""
         grouped = {}
         for item in items_list:
             group_key = item.get('id')
             if group_key not in grouped:
+                # Si no existe, creamos una entrada base. Hacemos una copia para no mutar el original.
                 first_item = item.copy()
                 first_item['cantidad'] = 0
                 grouped[group_key] = first_item
-            grouped[group_key]['cantidad'] += 1
+            
+            # Sumamos la cantidad del artículo actual.
+            grouped[group_key]['cantidad'] += item.get('cantidad', 1)
+            
         return list(grouped.values())
 
     def _remove_item_by_id(self, item_id_to_remove):
@@ -558,18 +566,22 @@ class SellBookDialog(QDialog):
         self.isbn_input.clear()
 
     def _add_disc_item(self):
+        """Añade un CD a la venta, pidiendo precio y cantidad."""
         dialog = PriceInputDialog(self, title="Añadir Disco", show_quantity=True, default_price=5000)
         if dialog.exec() == QDialog.Accepted:
             price, quantity = dialog.get_values()
-            disc_data = {
-                'id': f'disc_{int(price)}',
-                'titulo': 'Disco Musical',
-                'precio': price,
-                'cantidad': quantity
-            }
-            self.add_item_to_sale(disc_data)
+            
+            if price > 0 and quantity > 0:
+                disc_data = {
+                    'id': f'disc_{int(price)}',  # ID dinámico para agrupar por precio
+                    'titulo': 'Disco Musical',
+                    'precio': price,
+                    'cantidad': quantity
+                }
+                self.add_item_to_sale(disc_data)
 
     def _add_promo_item(self):
+        """Añade un artículo de promoción con precio y ID fijos."""
         promo_data = {
             'id': 'promo_10000',
             'titulo': 'Promoción de Libro',
@@ -579,25 +591,27 @@ class SellBookDialog(QDialog):
         self.add_item_to_sale(promo_data)
 
     def _confirm_sale(self):
+        """
+        Confirma la venta, procesa los artículos y cierra el diálogo.
+        """
         if not self.raw_sale_items:
-            QMessageBox.warning(self, "Venta Vacía", "No hay artículos en la venta para procesar.")
+            QMessageBox.warning(self, "Venta Vacía", "No hay artículos en la lista para vender.")
             return
 
-        base_total = self._calculate_base_total()
-        total_amount = self.manual_total if self.manual_total is not None else base_total
+        total_amount = self.manual_total if self.manual_total is not None else self._calculate_base_total()
         final_items = self._group_items(self.raw_sale_items)
-
-        reply = QMessageBox.question(self, "Confirmar Venta",
-                                     f"¿Desea finalizar la venta por un total de <b>${format_price(total_amount)}</b>?",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         
-        if reply == QMessageBox.Yes:
-            success, message = self.sell_service.process_sale(final_items, total_amount)
-            if success:
-                QMessageBox.information(self, "Éxito", message)
-                self.accept()
-            else:
-                QMessageBox.critical(self, "Error", message)
+        # Llamar al servicio de venta para procesar la transacción
+        success, message = self.sell_service.process_sale(
+            items=final_items,
+            total_amount=total_amount
+        )
+
+        if success:
+            QMessageBox.information(self, "Venta Exitosa", message)
+            self.accept()  # Cierra el diálogo con éxito
+        else:
+            QMessageBox.critical(self, "Error en la Venta", message)
 
     def _initial_reposition(self):
         self.adjustSize()

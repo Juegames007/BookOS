@@ -25,7 +25,11 @@ class SQLManager(DataManagerInterface):
         else:
             self.db_path = os.path.join(db_path, db_name)
         
-        self._create_connection()
+        self.conn = self._create_connection()
+
+    def get_connection(self) -> sqlite3.Connection:
+        """Devuelve la conexión activa a la base de datos."""
+        return self.conn
 
     def _create_connection(self) -> sqlite3.Connection:
         """Crea y retorna una conexión a la base de datos SQLite."""
@@ -52,11 +56,10 @@ class SQLManager(DataManagerInterface):
             El cursor de la ejecución si tiene éxito, None si falla.
         """
         try:
-            with self._create_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute(query, params or ())
-                conn.commit()
-                return cursor
+            cursor = self.conn.cursor()
+            cursor.execute(query, params or ())
+            self.conn.commit()
+            return cursor
         except sqlite3.Error as e:
             print(f"Error al ejecutar la consulta: {query}\nError: {e}")
             # Considerar si relanzar la excepción o cómo manejarla
@@ -75,12 +78,11 @@ class SQLManager(DataManagerInterface):
             Retorna una lista vacía si no hay resultados o en caso de error.
         """
         try:
-            with self._create_connection() as conn:
-                conn.row_factory = sqlite3.Row # Permite acceder a las columnas por nombre
-                cursor = conn.cursor()
-                cursor.execute(query, params or ())
-                rows = cursor.fetchall()
-                return [dict(row) for row in rows] # Convertir cada sqlite3.Row a un diccionario
+            self.conn.row_factory = sqlite3.Row # Permite acceder a las columnas por nombre
+            cursor = self.conn.cursor()
+            cursor.execute(query, params or ())
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows] # Convertir cada sqlite3.Row a un diccionario
         except sqlite3.Error as e:
             print(f"Error al ejecutar la consulta de búsqueda: {query}\nError: {e}")
             return []
@@ -120,7 +122,7 @@ class SQLManager(DataManagerInterface):
         query = f"CREATE TABLE IF NOT EXISTS {hoja_nombre} {stripped_cols_def}"
         
         # execute_query ya tiene un try-except para errores de SQLite
-        cursor = self.execute_query(query)
+        self.execute_query(query)
         
         if cursor is not None: # execute_query retorna None en caso de error de ejecución SQL
             # No podemos saber directamente desde el cursor si CREATE TABLE IF NOT EXISTS
@@ -141,9 +143,8 @@ class SQLManager(DataManagerInterface):
 
         query = f"SELECT * FROM {hoja_nombre}"
         try:
-            with self._create_connection() as conn:
-                df = pd.read_sql_query(query, conn)
-                return df
+            df = pd.read_sql_query(query, self.conn)
+            return df
         except Exception as e: # pd.read_sql_query puede lanzar sus propios errores
             print(f"Error al leer la tabla '{hoja_nombre}' a DataFrame: {e}")
             return pd.DataFrame() # Retorna DataFrame vacío en caso de error

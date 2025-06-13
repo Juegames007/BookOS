@@ -31,35 +31,95 @@ class SellService:
                 
         return None
 
-    def process_sale(self, items: List[Dict[str, Any]], total_amount: float) -> (bool, str):
+    def _get_or_create_generic_client_id(self, cursor) -> int:
+        """
+        Busca el 'Cliente Genérico'. Si no existe, lo crea.
+        Devuelve el ID del cliente.
+        """
+        generic_client_name = "Cliente Genérico"
+        generic_client_phone = "000000000"  # Teléfono único para identificarlo
+
+        cursor.execute("SELECT id_cliente FROM clientes WHERE telefono = ?", (generic_client_phone,))
+        result = cursor.fetchone()
+        
+        if result:
+            return result[0]
+        else:
+            cursor.execute(
+                "INSERT INTO clientes (nombre, telefono) VALUES (?, ?)",
+                (generic_client_name, generic_client_phone)
+            )
+            return cursor.lastrowid
+
+    def process_sale(self, items: List[Dict[str, Any]], total_amount: float, notes: str = "") -> (bool, str):
         """
         Procesa una venta, actualiza el inventario y registra la transacción.
-        - Para libros (con ISBN), disminuye la cantidad en la tabla 'inventario'.
-        - Para otros artículos (discos, promos), solo los registra en la venta.
-        - Registra los detalles de la venta en las tablas 'ventas' y 'detalles_venta'.
-        
-        NOTA: Esta es una implementación simulada. La lógica real de la base de datos
-        se añadirá en pasos posteriores.
         """
         if not items:
             return False, "No se puede procesar una venta sin artículos."
 
-        try:
-            # Aquí iría la lógica de la transacción de la base de datos.
-            # 1. Iniciar una transacción.
-            # 2. Crear un nuevo registro en la tabla 'ventas'.
-            # 3. Iterar sobre `items`:
-            #    a. Para cada item, crear un registro en 'detalles_venta'.
-            #    b. Si es un libro, buscar su 'id_inventario' y disminuir la cantidad.
-            # 4. Si todo va bien, confirmar la transacción.
-            # 5. Si algo falla, hacer rollback.
-            print("Procesando venta (simulado)...")
-            print(f"Total de la venta: {total_amount}")
-            for item in items:
-                print(f" - Artículo: {item.get('titulo', item.get('id'))}, Cantidad: {item.get('cantidad', 1)}")
+        connection = self.data_manager.get_connection()
+        cursor = connection.cursor()
 
-            return True, "Venta procesada con éxito (simulado)."
+        try:
+            cursor.execute("BEGIN")
+
+            # 1. Obtener o crear el ID del cliente genérico
+            client_id = self._get_or_create_generic_client_id(cursor)
+
+            # 2. Verificar el stock de todos los artículos antes de cualquier modificación
+            for item in items:
+                isbn = item.get('id')
+                # Solo verificar stock para libros, no para promociones o discos
+                if not str(isbn).startswith(('promo_', 'disc_')):
+                    quantity_to_sell = item.get('cantidad', 1)
+                    cursor.execute("SELECT SUM(cantidad) FROM inventario WHERE libro_isbn = ?", (isbn,))
+                    stock_result = cursor.fetchone()
+                    current_stock = stock_result[0] if stock_result and stock_result[0] is not None else 0
+                    if current_stock < quantity_to_sell:
+                        raise ValueError(f"Stock insuficiente para el libro con ISBN {isbn}. Solicitado: {quantity_to_sell}, Disponible: {current_stock}")
+
+            # 3. Crear un nuevo registro en la tabla 'ventas'
+            sale_data = (client_id, total_amount, notes)
+            cursor.execute("INSERT INTO ventas (id_cliente, monto_total, notas) VALUES (?, ?, ?)", sale_data)
+            sale_id = cursor.lastrowid
+            if not sale_id:
+                raise Exception("No se pudo crear el registro de venta.")
+
+            # 4. Iterar sobre los artículos, registrarlos en 'detalles_venta' y actualizar 'inventario'
+            for item in items:
+                isbn = item.get('id')
+                quantity_to_sell = item.get('cantidad', 1)
+                unit_price = item.get('precio', 0)
+
+                # a. Insertar en 'detalles_venta'
+                detail_data = (sale_id, isbn, quantity_to_sell, unit_price)
+                cursor.execute("INSERT INTO detalles_venta (id_venta, libro_isbn, cantidad, precio_unitario) VALUES (?, ?, ?, ?)", detail_data)
+
+                # b. Actualizar inventario solo para libros reales
+                if not str(isbn).startswith(('promo_', 'disc_')):
+                    cursor.execute("SELECT id_inventario, cantidad FROM inventario WHERE libro_isbn = ? AND cantidad > 0 ORDER BY id_inventario", (isbn,))
+                    inventory_entries = cursor.fetchall()
+                    
+                    remaining_to_sell = quantity_to_sell
+                    for entry_id, stock in inventory_entries:
+                        if remaining_to_sell <= 0: break
+                        
+                        if remaining_to_sell < stock:
+                            new_stock = stock - remaining_to_sell
+                            cursor.execute("UPDATE inventario SET cantidad = ?, fecha_actualizacion_cantidad = datetime('now') WHERE id_inventario = ?", (new_stock, entry_id))
+                            remaining_to_sell = 0
+                        else:
+                            cursor.execute("DELETE FROM inventario WHERE id_inventario = ?", (entry_id,))
+                            remaining_to_sell -= stock
+                    
+                    if remaining_to_sell > 0:
+                        # Esta comprobación es una salvaguarda; el chequeo inicial debería haberlo prevenido.
+                        raise Exception(f"Inconsistencia de stock para ISBN {isbn} durante la actualización.")
+
+            connection.commit()
+            return True, f"Venta #{sale_id} procesada con éxito."
 
         except Exception as e:
-            # En un caso real, aquí se registraría el error.
+            connection.rollback()
             return False, f"Ocurrió un error al procesar la venta: {e}" 

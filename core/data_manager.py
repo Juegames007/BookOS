@@ -81,6 +81,15 @@ class DataManager:
         else:
             raise NotImplementedError(f"La estrategia {type(self.base_de_datos).__name__} no soporta 'fetch_query'.")
 
+    def get_connection(self):
+        """
+        Devuelve el objeto de conexión si la estrategia subyacente lo soporta.
+        """
+        if hasattr(self.base_de_datos, 'get_connection'):
+            return self.base_de_datos.get_connection()
+        else:
+            raise NotImplementedError(f"La estrategia {type(self.base_de_datos).__name__} no soporta 'get_connection'.")
+
     # --- Métodos alias para compatibilidad con código que espera nombres específicos ---
 
     def execute_query(self, query: str, params: Optional[tuple] = None):

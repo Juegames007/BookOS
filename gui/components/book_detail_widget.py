@@ -155,11 +155,10 @@ class BookDetailWidget(QFrame):
 
         self.view_image_button.setStyleSheet(image_button_style)
         self.view_image_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.view_image_button.clicked.connect(self._on_view_image_clicked)
-        self.view_image_button.setVisible(False)
         self.view_image_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.view_image_button.setMinimumHeight(32) 
         self.view_image_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.view_image_button.clicked.connect(self._on_view_image_clicked)
 
         self.details_layout.addWidget(self.view_image_button, 0, Qt.AlignmentFlag.AlignLeft)
         
@@ -214,55 +213,32 @@ class BookDetailWidget(QFrame):
         image_url = book_data.get("Imagen", "")
         has_image_url = bool(image_url)
 
-        self.view_image_button.setVisible(True) # Always visible, icon/text changes
-
-        print(f"[BookDetailWidget] Updating. Has image URL: {has_image_url}")
+        self.view_image_button.setEnabled(has_image_url) # Habilitar/deshabilitar según si hay URL
 
         if has_image_url:
-            self.view_image_button.setText(" View Image") # Text for button with icon
-            print(f"[BookDetailWidget] Attempting to load icon from: {VER_ICON_PATH}")
+            self.view_image_button.setText(" Ver Imagen")
             if os.path.exists(VER_ICON_PATH):
-                print(f"[BookDetailWidget] Icon '{os.path.basename(VER_ICON_PATH)}' exists.")
                 self.view_image_button.setIcon(QIcon(VER_ICON_PATH))
-                self.view_image_button.setToolTip("View Image")
+                self.view_image_button.setToolTip("Ver imagen en el navegador")
             else:
-                print(f"[BookDetailWidget] Advertencia: Icon '{os.path.basename(VER_ICON_PATH)}' NOT FOUND. Text only.")
-                self.view_image_button.setIcon(QIcon()) # Clear icon
-                self.view_image_button.setToolTip(f"Icon {os.path.basename(VER_ICON_PATH)} not found")
-            # Ensure click is enabled
-            if not self.view_image_button.signalsBlocked():
-                 try: self.view_image_button.clicked.disconnect(self._on_view_image_clicked) # disconnect first to avoid multiple connections
-                 except RuntimeError: pass # Vey likely to happen on first connection
-                 self.view_image_button.clicked.connect(self._on_view_image_clicked)
-            self.view_image_button.setEnabled(True)
-
-        else: # No image URL in book data
-            self.view_image_button.setText(" No Image") # Text for button with no_ver_icon or if icon fails
-            print(f"[BookDetailWidget] No image URL. Attempting to load icon from: {NO_VER_ICON_PATH}")
+                self.view_image_button.setIcon(QIcon())
+                self.view_image_button.setToolTip("Icono no encontrado")
+        else:
+            self.view_image_button.setText(" No disponible")
             if os.path.exists(NO_VER_ICON_PATH):
-                print(f"[BookDetailWidget] Icon '{os.path.basename(NO_VER_ICON_PATH)}' exists for no image URL.")
                 self.view_image_button.setIcon(QIcon(NO_VER_ICON_PATH))
-                self.view_image_button.setToolTip("No image available")
+                self.view_image_button.setToolTip("No hay imagen disponible para este libro")
             else:
-                print(f"[BookDetailWidget] Advertencia: Fallback icon '{os.path.basename(NO_VER_ICON_PATH)}' NOT FOUND. Text only.")
-                self.view_image_button.setIcon(QIcon()) # Clear icon
-                self.view_image_button.setToolTip(f"No image available and icon {os.path.basename(NO_VER_ICON_PATH)} not found")
-            # Disable click or change behavior for no image
-            try: self.view_image_button.clicked.disconnect(self._on_view_image_clicked) # Disconnect since no action
-            except RuntimeError: pass
-            self.view_image_button.setEnabled(False) # Disable button if no image URL
+                self.view_image_button.setIcon(QIcon())
+                self.view_image_button.setToolTip("Icono no encontrado")
 
         self.view_image_button.setIconSize(QSize(16,16))
 
     def _on_view_image_clicked(self):
         if self._current_book_data:
-            image_url = self._current_book_data.get("Imagen", "")
+            image_url = self._current_book_data.get("Imagen")
             if image_url:
-                print(f"Intentando abrir URL de imagen: {image_url}")
-                # QDesktopServices.openUrl(QUrl(image_url)) # This is the standard way
-                self.image_view_requested.emit(image_url) # Emit signal instead
-            else:
-                print("No hay URL de imagen para mostrar.")
+                self.image_view_requested.emit(image_url)
 
 # Example Usage (for testing this component standalone)
 if __name__ == '__main__':
