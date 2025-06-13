@@ -253,6 +253,13 @@ class SellBookDialog(QDialog):
             }}
         """)
 
+        self.apply_discount_button = QPushButton(QIcon(get_icon_path("actualizar.png")), "")
+        self.apply_discount_button.setFixedSize(45, 45)
+        self.apply_discount_button.setIconSize(QSize(22, 22))
+        self.apply_discount_button.setCursor(Qt.PointingHandCursor)
+        self.apply_discount_button.setAutoDefault(False)
+        self.apply_discount_button.setStyleSheet(STYLES['button_secondary_full'].replace("font-weight: bold;", ""))
+
         self.confirm_button = QPushButton("Confirmar Venta")
         self.confirm_button.setFixedHeight(45)
         self.confirm_button.setFont(QFont(FONTS['family'], 11, QFont.Weight.Bold))
@@ -263,6 +270,7 @@ class SellBookDialog(QDialog):
         footer_layout.addWidget(subtotal_label)
         footer_layout.addSpacing(10)
         footer_layout.addWidget(self.subtotal_input)
+        footer_layout.addWidget(self.apply_discount_button)
         footer_layout.addStretch()
         footer_layout.addWidget(self.confirm_button)
         return footer_layout
@@ -274,6 +282,7 @@ class SellBookDialog(QDialog):
         self.confirm_button.clicked.connect(self._confirm_sale)
         self.subtotal_input.textChanged.connect(self._format_subtotal_input)
         self.subtotal_input.editingFinished.connect(self._finalize_subtotal_edit)
+        self.apply_discount_button.clicked.connect(self._finalize_subtotal_edit)
     
     def _expand_and_recenter(self):
         """Expande la ventana para mostrar la lista de artículos y la centra."""
