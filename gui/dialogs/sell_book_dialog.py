@@ -235,9 +235,23 @@ class SellBookDialog(QDialog):
         subtotal_label.setFont(QFont(FONTS['family_title'], 14, QFont.Weight.Normal))
         subtotal_label.setStyleSheet(f"color: {COLORS['text_secondary']};")
 
-        self.subtotal_value_label = QLabel("$0")
-        self.subtotal_value_label.setFont(QFont(FONTS['family_title'], 18, QFont.Weight.Bold))
-        self.subtotal_value_label.setStyleSheet(f"color: {COLORS['text_primary']};")
+        self.subtotal_input = QLineEdit("$0")
+        self.subtotal_input.setFixedWidth(180)
+        self.subtotal_input.setFixedHeight(45)
+        self.subtotal_input.setAlignment(Qt.AlignRight)
+        self.subtotal_input.setFont(QFont(FONTS['family'], 18, QFont.Weight.Bold))
+        self.subtotal_input.setStyleSheet(f"""
+            QLineEdit {{
+                color: {COLORS['text_primary']};
+                background-color: white;
+                border: 1px solid {COLORS['border_medium']};
+                border-radius: 8px;
+                padding-right: 10px;
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {COLORS['border_focus']};
+            }}
+        """)
 
         self.confirm_button = QPushButton("Confirmar Venta")
         self.confirm_button.setFixedHeight(45)
@@ -248,7 +262,7 @@ class SellBookDialog(QDialog):
         
         footer_layout.addWidget(subtotal_label)
         footer_layout.addSpacing(10)
-        footer_layout.addWidget(self.subtotal_value_label)
+        footer_layout.addWidget(self.subtotal_input)
         footer_layout.addStretch()
         footer_layout.addWidget(self.confirm_button)
         return footer_layout
@@ -258,6 +272,8 @@ class SellBookDialog(QDialog):
         self.disc_btn.clicked.connect(self._add_disc_item)
         self.promo_btn.clicked.connect(self._add_promo_item)
         self.confirm_button.clicked.connect(self._confirm_sale)
+        self.subtotal_input.textChanged.connect(self._format_subtotal_input)
+        self.subtotal_input.editingFinished.connect(self._finalize_subtotal_edit)
     
     def _expand_and_recenter(self):
         """Expande la ventana para mostrar la lista de artículos y la centra."""
@@ -308,20 +324,25 @@ class SellBookDialog(QDialog):
         self._update_all_views()
 
     def _update_all_views(self):
-        base_total = sum(item.get('precio', 0) for item in self.raw_sale_items)
+        base_total = self._calculate_base_total()
         display_total = self.manual_total if self.manual_total is not None else base_total
 
-        self.subtotal_value_label.setText(f"${format_price(display_total)}")
-        self._redraw_sale_list()
+        self._update_subtotal_display(display_total)
 
-    def _redraw_sale_list(self):
+        items_to_display = self.raw_sale_items
+        if self.manual_total is not None:
+            items_to_display = self._get_adjusted_items(self.raw_sale_items, self.manual_total)
+
+        self._redraw_sale_list(items_to_display)
+
+    def _redraw_sale_list(self, items_to_display):
         # Limpiar layout existente
         while self.items_layout.count():
             child = self.items_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
 
-        grouped_items = self._group_items(self.raw_sale_items)
+        grouped_items = self._group_items(items_to_display)
 
         # Añadir widgets de artículos
         for i, item_data in enumerate(grouped_items):
@@ -399,7 +420,7 @@ class SellBookDialog(QDialog):
             QMessageBox.warning(self, "Venta Vacía", "No hay artículos en la venta para procesar.")
             return
 
-        base_total = sum(item.get('precio', 0) for item in self.raw_sale_items)
+        base_total = self._calculate_base_total()
         total_amount = self.manual_total if self.manual_total is not None else base_total
         final_items = self._group_items(self.raw_sale_items)
 
@@ -418,3 +439,74 @@ class SellBookDialog(QDialog):
     def _initial_reposition(self):
         self.adjustSize()
         self._center_window()
+
+    def _calculate_base_total(self):
+        """Calcula el total a partir de los precios originales de los items."""
+        return sum(item.get('precio', 0) for item in self.raw_sale_items)
+
+    def _update_subtotal_display(self, amount):
+        """Actualiza el QLineEdit del subtotal sin emitir señales."""
+        self.subtotal_input.blockSignals(True)
+        self.subtotal_input.setText(f"${format_price(amount)}")
+        self.subtotal_input.blockSignals(False)
+
+    def _format_subtotal_input(self):
+        """Da formato al texto del subtotal con separadores de miles mientras se escribe."""
+        line_edit = self.subtotal_input
+        line_edit.blockSignals(True)
+        
+        text = line_edit.text()
+        cursor_pos = line_edit.cursorPosition()
+        
+        clean_text = "".join(filter(str.isdigit, text))
+        
+        if clean_text:
+            number = int(clean_text)
+            formatted_text = f"${format_price(number)}"
+        else:
+            formatted_text = "$"
+            
+        line_edit.setText(formatted_text)
+        
+        length_diff = len(formatted_text) - len(text)
+        new_cursor_pos = cursor_pos + length_diff
+        line_edit.setCursorPosition(max(1, new_cursor_pos))
+        
+        line_edit.blockSignals(False)
+
+    def _finalize_subtotal_edit(self):
+        """Se activa al terminar de editar para aplicar el total manual."""
+        raw_text = ''.join(filter(str.isdigit, self.subtotal_input.text()))
+        new_total = float(raw_text) if raw_text else 0.0
+        
+        base_total = self._calculate_base_total()
+
+        if abs(new_total - base_total) < 0.01:
+            self.manual_total = None
+        else:
+            self.manual_total = new_total
+        
+        self._update_all_views()
+
+    def _get_adjusted_items(self, base_items, target_total):
+        """Devuelve una nueva lista de items con precios ajustados proporcionalmente."""
+        adjusted = [item.copy() for item in base_items]
+        base_total = sum(item.get('precio', 0) for item in adjusted)
+
+        if base_total == 0:
+            if target_total != 0 and adjusted:
+                avg_price = target_total / len(adjusted)
+                for item in adjusted: item['precio'] = avg_price
+            return adjusted
+        
+        scale_factor = target_total / base_total
+        running_total = 0
+        for item in adjusted[:-1]:
+            new_price = round(item['precio'] * scale_factor)
+            item['precio'] = new_price
+            running_total += new_price
+        
+        if adjusted:
+            adjusted[-1]['precio'] = target_total - running_total
+            
+        return adjusted
