@@ -38,7 +38,11 @@ COLORS = {
     "border_light": "rgba(220, 220, 220, 70)",
     "border_medium": "rgba(200, 200, 200, 80)",
     "border_focus": "#3498db",
-    "border_black" : "#b7babd"
+    "border_black" : "#b7babd",
+    
+    "accent_purple": "#6D28D9",
+    "accent_purple_hover": "#5B21B6",
+    "accent_purple_pressed": "#4C1D95",
 }
 
 # --- Fuentes ---
@@ -175,6 +179,22 @@ STYLES = {
         }}
     """,
 
+    "button_secondary_full": f"""
+        QPushButton {{
+            background-color: {COLORS["accent_purple"]};
+            color: white;
+            border-radius: 8px;
+            padding: 5px 15px;
+            border: none;
+        }}
+        QPushButton:hover {{
+            background-color: {COLORS["accent_purple_hover"]};
+        }}
+        QPushButton:pressed {{
+            background-color: {COLORS["accent_purple_pressed"]};
+        }}
+    """,
+
     "main_menu_card_style": f"""
         QFrame#mainMenuCard {{
         background-color: rgba(255, 255, 255, 89); /* Ajustado para opacidad 0.35 */
@@ -189,5 +209,18 @@ STYLES = {
         QFrame#mainMenuCard CustomButton {{
             background-color: transparent;
         }}*/
+    """,
+
+    "line_edit_style": f"""
+        QLineEdit {{
+            color: {COLORS['text_primary']};
+            border: 1px solid #bdc3c7;
+            border-radius: 8px;
+            padding: 5px 15px;
+            background-color: #FFFFFF;
+        }}
+        QLineEdit:focus {{
+            border: 2px solid {COLORS['border_focus']};
+        }}
     """,
 } 

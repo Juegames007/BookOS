@@ -43,11 +43,11 @@ class VentanaGestionLibreria(QMainWindow):
         self.font_family = FONTS["family"]
         
         # --- Centralización de la creación de servicios ---
-        data_manager = DependencyFactory.get_data_manager()
-        book_info_fetcher = DependencyFactory.get_book_info_service()
-        self.book_service = BookService(data_manager, book_info_fetcher)
-        self.reservation_service = ReservationService(data_manager)
-        self.sell_service = SellService(data_manager)
+        self.data_manager = DependencyFactory.get_data_manager()
+        self.book_info_service = DependencyFactory.get_book_info_service()
+        self.book_service = BookService(self.data_manager, self.book_info_service)
+        self.reservation_service = ReservationService(self.data_manager)
+        self.sell_service = SellService(self.data_manager, self.book_service)
 
         target_width, target_height = 1366, 768
         try:

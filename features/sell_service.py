@@ -1,9 +1,32 @@
 from core.interfaces import DataManagerInterface
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from features.book_service import BookService
 
 class SellService:
-    def __init__(self, data_manager: DataManagerInterface):
+    def __init__(self, data_manager: DataManagerInterface, book_service: BookService):
         self.data_manager = data_manager
+        self.book_service = book_service
+
+    def find_book_by_isbn_for_sale(self, isbn: str) -> Optional[Dict[str, Any]]:
+        """
+        Busca un libro por su ISBN y verifica si hay stock para la venta.
+        Devuelve un diccionario con los datos del libro si está disponible.
+        """
+        search_result = self.book_service.buscar_libro_por_isbn(isbn)
+        
+        if search_result["status"] in ["encontrado_completo"] and search_result["inventory_entries"]:
+            total_quantity = sum(entry.get('cantidad', 0) for entry in search_result["inventory_entries"])
+            
+            if total_quantity > 0:
+                book_details = search_result["book_details"]
+                return {
+                    'id': book_details["ISBN"],
+                    'titulo': book_details["Título"],
+                    'precio': book_details.get("Precio", 0),
+                    'cantidad': 1
+                }
+                
+        return None
 
     def process_sale(self, items: List[Dict[str, Any]], total_amount: float) -> (bool, str):
         """
