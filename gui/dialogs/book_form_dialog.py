@@ -82,7 +82,7 @@ class CustomToggleSwitch(QWidget):
 class BookFormDialog(QDialog):
     save_requested = Signal(dict)
 
-    def __init__(self, book_service: BookService, mode: str = 'ADD', initial_isbn: Optional[str] = None, parent=None):
+    def __init__(self, book_service: BookService, mode: str = 'ADD', initial_isbn: Optional[str] = None, parent=None, blur_effect=None):
         super().__init__(parent)
         self.book_service = book_service
         self.mode = mode.upper()
@@ -100,15 +100,9 @@ class BookFormDialog(QDialog):
         self.detail_widgets_container = None
         self.action_buttons_container = None
         
-        self._blur_effect = None
-        if self.parent():
-            self._blur_effect = QGraphicsBlurEffect()
-            self._blur_effect.setBlurRadius(15)
-            self._blur_effect.setEnabled(False)
-            if hasattr(self.parent(), 'centralWidget') and self.parent().centralWidget():
-                 self.parent().centralWidget().setGraphicsEffect(self._blur_effect)
-            elif hasattr(self.parent(), 'current_stacked_widget'):
-                 self.parent().current_stacked_widget.setGraphicsEffect(self._blur_effect)
+        self._blur_effect = blur_effect # Usar el efecto pasado
+        if self._blur_effect:
+            self._blur_effect.setEnabled(False) # Asegurarse que empieza deshabilitado
         
         self._setup_ui()
         self._configure_for_mode()
@@ -394,20 +388,9 @@ class BookFormDialog(QDialog):
         self.save_requested.emit(book_data)
 
     def _enable_blur(self, enable: bool):
-        if not hasattr(self, '_blur_effect') or not self._blur_effect: return
-        if not self.parent(): return
-        
-        target_widget = self.parent().centralWidget() if hasattr(self.parent(), 'centralWidget') and self.parent().centralWidget() else self.parent()
-        if target_widget:
-            if enable:
-                if target_widget.graphicsEffect() != self._blur_effect:
-                    target_widget.setGraphicsEffect(self._blur_effect)
-                self._blur_effect.setEnabled(True)
-            else:
-                if target_widget.graphicsEffect() == self._blur_effect:
-                    self._blur_effect.setEnabled(False)
-                    target_widget.setGraphicsEffect(None)
-            target_widget.update()
+        """Activa o desactiva el efecto de desenfoque en el widget padre."""
+        if self._blur_effect:
+            self._blur_effect.setEnabled(enable)
 
     def exec(self):
         self._enable_blur(True)
@@ -424,8 +407,8 @@ class BookFormDialog(QDialog):
         super().closeEvent(event)
 
     def _recenter_dialog(self):
-        if self.parentWidget():
-            p_geom = self.parentWidget().geometry()
+        if self.parent():
+            p_geom = self.parent().geometry()
             self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
 
     def mousePressEvent(self, event: QMouseEvent):

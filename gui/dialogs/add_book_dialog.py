@@ -13,9 +13,9 @@ class AddBookDialog(BookFormDialog):
     """
     Diálogo para agregar libros, que utiliza BookFormDialog en modo 'ADD'.
     """
-    def __init__(self, book_service: BookService, parent=None):
+    def __init__(self, book_service: BookService, parent=None, blur_effect=None):
         # Inicializa el formulario base en modo "Agregar"
-        super().__init__(book_service, mode='ADD', parent=parent)
+        super().__init__(book_service, mode='ADD', parent=parent, blur_effect=blur_effect)
         
         # Conecta la señal genérica de guardado a la función específica de este diálogo
         self.save_requested.connect(self.handle_save_request)

@@ -46,6 +46,7 @@ class VentanaGestionLibreria(QMainWindow):
         self.blur_effect = QGraphicsBlurEffect()
         self.blur_effect.setBlurRadius(15)
         self.blur_effect.setEnabled(False) # Inicialmente desactivado
+        self.current_dialog = None # Referencia al diálogo activo
 
         # --- Centralización de la creación de servicios ---
         self.data_manager = DependencyFactory.get_data_manager()
@@ -90,7 +91,12 @@ class VentanaGestionLibreria(QMainWindow):
         libros_encontrados = self.book_service.buscar_libros(termino_busqueda)
         if hasattr(self, 'current_search_results_window') and self.current_search_results_window:
             self.current_search_results_window.close()
-        self.current_search_results_window = SearchResultsWindow(libros_encontrados, termino_busqueda, self)
+        self.current_search_results_window = SearchResultsWindow(
+            libros_encontrados, 
+            termino_busqueda, 
+            parent=self,
+            blur_effect=self.blur_effect
+        )
         self.current_search_results_window.show()
 
     def paintEvent(self, event):
@@ -111,11 +117,11 @@ class VentanaGestionLibreria(QMainWindow):
         accion_limpia = accion.strip()
 
         if accion_limpia == "Agregar Libro":
-            dialog = AddBookDialog(self.book_service, self)
+            dialog = AddBookDialog(self.book_service, self, blur_effect=self.blur_effect)
             dialog.exec()
             
         elif accion_limpia == "Modificar Libro":
-            dialog = ModifyBookDialog(book_service=self.book_service, parent=self)
+            dialog = ModifyBookDialog(book_service=self.book_service, parent=self, blur_effect=self.blur_effect)
             dialog.exec()
         
         elif accion_limpia == "Vender Libro":
@@ -136,28 +142,25 @@ class VentanaGestionLibreria(QMainWindow):
 
     def _open_sell_book_dialog(self):
         self.blur_effect.setEnabled(True)
-        self.main_menu_widget.setGraphicsEffect(self.blur_effect)
+        self.current_dialog = SellBookDialog(self.book_service, self.sell_service, self)
+        self.current_dialog.setModal(True)
+        self.current_dialog.finished.connect(self._on_sell_dialog_finished)
+        self.current_dialog.show()
 
-        dialog = SellBookDialog(self.book_service, self.sell_service, self)
-        dialog.setModal(True)
-        
-        dialog.finished.connect(lambda: self.blur_effect.setEnabled(False))
-        
-        dialog.show()
+    def _on_sell_dialog_finished(self):
+        self.blur_effect.setEnabled(False)
+        self.current_dialog = None
 
     def _open_view_reservations_dialog(self):
         QTimer.singleShot(0, lambda: self._create_and_exec_view_reservations_dialog())
 
     def _create_and_exec_view_reservations_dialog(self):
-        blur_effect = QGraphicsBlurEffect()
-        blur_effect.setBlurRadius(15)
-        self.main_menu_widget.setGraphicsEffect(blur_effect)
-
+        self.blur_effect.setEnabled(True)
         try:
             dialog = ExistingReservationsDialog(self.reservation_service, self)
             dialog.exec()
         finally:
-            self.main_menu_widget.setGraphicsEffect(None)
+            self.blur_effect.setEnabled(False)
     
     def resizeEvent(self, event):
         super().resizeEvent(event)

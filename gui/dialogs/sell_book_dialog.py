@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QFrame, QHBoxLayout, 
                              QSpacerItem, QSizePolicy, QPushButton, QLineEdit, QScrollArea, QWidget, QMessageBox, QGridLayout)
-from PySide6.QtCore import Qt, QSize, QTimer
+from PySide6.QtCore import Qt, QSize, QTimer, Signal
 from PySide6.QtGui import QFont, QIcon, QPainter, QScreen
 import uuid
 from features.book_service import BookService
@@ -37,6 +37,8 @@ class PlaceholderWidget(QFrame):
 
 class SaleItemWidget(QFrame):
     """Widget para mostrar un artículo en la lista de venta, con el nuevo diseño."""
+    remove_item = Signal(str)
+
     def __init__(self, item_data, parent=None):
         super().__init__(parent)
         self.item_data = item_data
@@ -106,13 +108,37 @@ class SaleItemWidget(QFrame):
         main_layout.addLayout(text_layout, 0, 1)
         main_layout.addWidget(price_label, 0, 2, Qt.AlignCenter)
         
-        # Configurar las columnas para que el texto se expanda
+        # Configurar las columnas para que el tegxto se expanda
         main_layout.setColumnStretch(1, 1)
         main_layout.setColumnMinimumWidth(0, 40)
         main_layout.setColumnMinimumWidth(2, 60)
 
+        # --- Botón de Eliminar ---
+        remove_btn = QPushButton("×", self)
+        remove_btn.setFixedSize(22, 22)
+        remove_btn.setCursor(Qt.PointingHandCursor)
+        remove_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FEE2E2;
+                color: #EF4444;
+                border: none;
+                border-radius: 11px;
+                font-family: "Arial";
+                font-size: 16px;
+                font-weight: bold;
+                padding-bottom: 2px;
+            }
+            QPushButton:hover { background-color: #FECACA; }
+            QPushButton:pressed { background-color: #FCA5A5; }
+        """)
+        remove_btn.move(self.width() - remove_btn.width() - 5, 5)
+        remove_btn.raise_()
+        
+        item_id_to_remove = self.item_data.get('id')
+        remove_btn.clicked.connect(lambda: self.remove_item.emit(item_id_to_remove))
+
 class SellBookDialog(QDialog):
-    NUM_ITEMS_PLACEHOLDERS = 6
+    NUM_ITEMS_PER_PAGE = 6
     
     def __init__(self, book_service: BookService, sell_service: SellService, parent=None):
         super().__init__(parent)
@@ -121,6 +147,7 @@ class SellBookDialog(QDialog):
         self.raw_sale_items = []
         self.manual_total = None
         self.is_content_expanded = False
+        self.current_page = 0
 
         self._setup_window()
         self._setup_ui()
@@ -169,6 +196,13 @@ class SellBookDialog(QDialog):
         self.items_layout.setSpacing(15)
         self.items_container.setVisible(False)
         content_layout.addWidget(self.items_container)
+
+        # --- Fila de Paginación ---
+        self.page_nav_container = QWidget()
+        nav_layout = self._create_navigation_layout()
+        self.page_nav_container.setLayout(nav_layout)
+        self.page_nav_container.setVisible(False)
+        content_layout.addWidget(self.page_nav_container)
 
         # --- Contenedor para el pie de página (inicialmente oculto) ---
         self.footer_container = QWidget()
@@ -227,6 +261,44 @@ class SellBookDialog(QDialog):
         input_layout.addStretch()
         return input_layout
 
+    def _create_navigation_layout(self):
+        nav_layout = QHBoxLayout()
+        nav_layout.setContentsMargins(0, 10, 0, 0)
+        
+        btn_style = """
+            QPushButton { 
+                background-color: rgba(0, 0, 0, 0.05); 
+                border: 1px solid rgba(0, 0, 0, 0.1); 
+                border-radius: 8px; color: #000; font-size: 12px; 
+                font-weight: 500; padding: 5px 10px;
+            } 
+            QPushButton:hover { background-color: rgba(0, 0, 0, 0.08); } 
+            QPushButton:disabled { 
+                background-color: rgba(0, 0, 0, 0.02); 
+                color: rgba(0, 0, 0, 0.3); 
+            }
+        """
+        
+        self.prev_button = QPushButton("◀ Anterior")
+        self.prev_button.setAutoDefault(False)
+        self.prev_button.setStyleSheet(btn_style)
+        
+        self.page_info_label = QLabel("")
+        self.page_info_label.setAlignment(Qt.AlignCenter)
+        self.page_info_label.setStyleSheet("color: #333; font-size: 12px; font-weight: 500;")
+
+        self.next_button = QPushButton("Siguiente ▶")
+        self.next_button.setAutoDefault(False)
+        self.next_button.setStyleSheet(btn_style)
+
+        nav_layout.addWidget(self.prev_button)
+        nav_layout.addStretch(1)
+        nav_layout.addWidget(self.page_info_label)
+        nav_layout.addStretch(1)
+        nav_layout.addWidget(self.next_button)
+        
+        return nav_layout
+
     def _create_footer_layout(self):
         footer_layout = QHBoxLayout()
         footer_layout.setContentsMargins(0, 15, 0, 0)
@@ -283,6 +355,8 @@ class SellBookDialog(QDialog):
         self.subtotal_input.textChanged.connect(self._format_subtotal_input)
         self.subtotal_input.editingFinished.connect(self._finalize_subtotal_edit)
         self.apply_discount_button.clicked.connect(self._finalize_subtotal_edit)
+        self.prev_button.clicked.connect(self._prev_page)
+        self.next_button.clicked.connect(self._next_page)
     
     def _expand_and_recenter(self):
         """Expande la ventana para mostrar la lista de artículos y la centra."""
@@ -291,6 +365,7 @@ class SellBookDialog(QDialog):
 
         self.items_container.setVisible(True)
         self.footer_container.setVisible(True)
+        self.page_nav_container.setVisible(True)
         
         QTimer.singleShot(0, self._reposition_window)
         self.is_content_expanded = True
@@ -321,6 +396,10 @@ class SellBookDialog(QDialog):
     def add_item_to_sale(self, item_data):
         self.manual_total = None 
         
+        # --- Lógica para añadir items y navegar a su página ---
+        # Guardamos el ID para encontrarlo después
+        item_id = item_data.get('id')
+
         quantity = item_data.get('cantidad', 1)
         for _ in range(quantity):
             single_item = item_data.copy()
@@ -329,6 +408,19 @@ class SellBookDialog(QDialog):
 
         if not self.is_content_expanded:
             self._expand_and_recenter()
+        
+        # Agrupar para encontrar la página del nuevo item
+        grouped_items = self._group_items(self.raw_sale_items)
+        try:
+            # Encontrar el índice del grupo al que pertenece el nuevo item
+            group_keys = [g['id'] for g in grouped_items]
+            item_index_in_groups = group_keys.index(item_id)
+            # Calcular a qué página corresponde
+            self.current_page = item_index_in_groups // self.NUM_ITEMS_PER_PAGE
+        except ValueError:
+            # Si algo falla, vamos a la última página como fallback
+            total_groups = len(grouped_items)
+            self.current_page = (total_groups - 1) // self.NUM_ITEMS_PER_PAGE if total_groups > 0 else 0
 
         self._update_all_views()
 
@@ -343,8 +435,10 @@ class SellBookDialog(QDialog):
             items_to_display = self._get_adjusted_items(self.raw_sale_items, self.manual_total)
 
         self._redraw_sale_list(items_to_display)
+        self._update_navigation()
 
     def _redraw_sale_list(self, items_to_display):
+        """Redibuja la lista de artículos en venta en la rejilla."""
         # Limpiar layout existente
         while self.items_layout.count():
             child = self.items_layout.takeAt(0)
@@ -352,16 +446,22 @@ class SellBookDialog(QDialog):
                 child.widget().deleteLater()
 
         grouped_items = self._group_items(items_to_display)
+        
+        # Paginación
+        start_index = self.current_page * self.NUM_ITEMS_PER_PAGE
+        end_index = start_index + self.NUM_ITEMS_PER_PAGE
+        page_item_groups = grouped_items[start_index:end_index]
 
         # Añadir widgets de artículos
-        for i, item_data in enumerate(grouped_items):
+        for i, item_data in enumerate(page_item_groups):
             widget = SaleItemWidget(item_data)
+            widget.remove_item.connect(self._remove_item_by_id)
             row, col = divmod(i, 2)
             self.items_layout.addWidget(widget, row, col)
 
         # Rellenar con marcadores de posición
-        num_items = len(grouped_items)
-        for i in range(num_items, self.NUM_ITEMS_PLACEHOLDERS):
+        num_items = len(page_item_groups)
+        for i in range(num_items, self.NUM_ITEMS_PER_PAGE):
             placeholder = PlaceholderWidget()
             row, col = divmod(i, 2)
             self.items_layout.addWidget(placeholder, row, col)
@@ -376,6 +476,60 @@ class SellBookDialog(QDialog):
                 grouped[group_key] = first_item
             grouped[group_key]['cantidad'] += 1
         return list(grouped.values())
+
+    def _remove_item_by_id(self, item_id_to_remove):
+        """Elimina una sola unidad de un artículo de la venta por su ID."""
+        # Al eliminar un item, cualquier descuento manual se resetea para evitar inconsistencias.
+        self.manual_total = None
+
+        item_found = False
+        for i, item in enumerate(self.raw_sale_items):
+            if item.get('id') == item_id_to_remove:
+                self.raw_sale_items.pop(i)
+                item_found = True
+                break
+        
+        if item_found:
+            self._update_all_views()
+        
+        # Si la lista de venta queda vacía, volvemos al estado inicial
+        if not self.raw_sale_items and self.is_content_expanded:
+            self._collapse_to_initial_state()
+
+    def _collapse_to_initial_state(self):
+        """Contrae la ventana a su estado inicial, ocultando la lista y el pie de página."""
+        self.is_content_expanded = False
+        self.items_container.setVisible(False)
+        self.footer_container.setVisible(False)
+        self.page_nav_container.setVisible(False)
+        QTimer.singleShot(0, self._reposition_window)
+
+    def _update_navigation(self):
+        total_groups = len(self._group_items(self.raw_sale_items))
+        has_items = total_groups > 0
+        
+        self.page_nav_container.setVisible(has_items)
+
+        if not has_items:
+            return
+
+        total_pages = (total_groups - 1) // self.NUM_ITEMS_PER_PAGE + 1
+        
+        self.page_info_label.setText(f"Página {self.current_page + 1} de {total_pages}")
+        self.prev_button.setEnabled(self.current_page > 0)
+        self.next_button.setEnabled(self.current_page < total_pages - 1)
+
+    def _prev_page(self):
+        if self.current_page > 0:
+            self.current_page -= 1
+            self._update_all_views()
+
+    def _next_page(self):
+        total_groups = len(self._group_items(self.raw_sale_items))
+        total_pages = (total_groups - 1) // self.NUM_ITEMS_PER_PAGE + 1
+        if self.current_page < total_pages - 1:
+            self.current_page += 1
+            self._update_all_views()
 
     # --- Métodos de lógica de negocio (sin cambios importantes) ---
 

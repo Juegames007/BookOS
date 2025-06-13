@@ -26,7 +26,7 @@ except NameError:
 class SearchResultsWindow(QDialog):
     # INACTIVITY_TIMEOUT_MS_RESULTS = 120000 # Timer logic removed
 
-    def __init__(self, libros_encontrados: list, termino_busqueda: str, parent: QWidget = None):
+    def __init__(self, libros_encontrados: list, termino_busqueda: str, parent: QWidget = None, blur_effect=None):
         super().__init__(parent)
         # Removed original setWindowTitle, new title is static
         
@@ -41,22 +41,10 @@ class SearchResultsWindow(QDialog):
         self.libros_actuales = [] # Store current books for view updates
         self.termino_busqueda_actual = termino_busqueda
 
-        # Blur effect logic (kept as is for now)
-        self._blur_effect = None
-        if self.parent():
-            self._blur_effect = QGraphicsBlurEffect()
-            self._blur_effect.setBlurRadius(15) # Increased blur radius for more glass effect
-            self._blur_effect.setEnabled(False)
-            target_widget_for_blur = None
-            if hasattr(self.parent(), 'centralWidget') and self.parent().centralWidget():
-                 target_widget_for_blur = self.parent().centralWidget()
-            elif hasattr(self.parent(), 'current_stacked_widget') and self.parent().current_stacked_widget:
-                 target_widget_for_blur = self.parent().current_stacked_widget
-            
-            if target_widget_for_blur:
-                target_widget_for_blur.setGraphicsEffect(self._blur_effect)
-            else:
-                print("Advertencia: SearchResultsWindow no pudo encontrar un widget central en el padre para aplicar el desenfoque.")
+        # Usar el efecto de desenfoque pasado desde el padre
+        self._blur_effect = blur_effect
+        if self._blur_effect:
+            self._blur_effect.setEnabled(False) # Asegurar que empieza deshabilitado
 
         # --- Main Layout --- (Vertical: Top Bar, Content Area)
         self.main_layout = QVBoxLayout(self)
@@ -222,23 +210,8 @@ class SearchResultsWindow(QDialog):
 
     # Blur enabling/disabling logic (kept as is for now)
     def _enable_blur(self, enable: bool):
-        if not self.parent() or not self._blur_effect:
-            return
-        target_widget = None
-        if hasattr(self.parent(), 'centralWidget') and self.parent().centralWidget():
-            target_widget = self.parent().centralWidget()
-        elif hasattr(self.parent(), 'current_stacked_widget') and self.parent().current_stacked_widget:
-            target_widget = self.parent().current_stacked_widget
-        if not target_widget: return
-        if enable:
-            if target_widget.graphicsEffect() != self._blur_effect:
-                target_widget.setGraphicsEffect(self._blur_effect)
-            self._blur_effect.setEnabled(True)
-        else:
-            if target_widget.graphicsEffect() == self._blur_effect:
-                self._blur_effect.setEnabled(False)
-                target_widget.setGraphicsEffect(None)
-        target_widget.update()
+        if self._blur_effect:
+            self._blur_effect.setEnabled(enable)
 
     def showEvent(self, event):
         super().showEvent(event)
