@@ -42,6 +42,11 @@ class VentanaGestionLibreria(QMainWindow):
         self.setWindowTitle("BookOS - Gestión de Librería")
         self.font_family = FONTS["family"]
         
+        # Efecto de desenfoque reutilizable
+        self.blur_effect = QGraphicsBlurEffect()
+        self.blur_effect.setBlurRadius(15)
+        self.blur_effect.setEnabled(False) # Inicialmente desactivado
+
         # --- Centralización de la creación de servicios ---
         self.data_manager = DependencyFactory.get_data_manager()
         self.book_info_service = DependencyFactory.get_book_info_service()
@@ -77,6 +82,7 @@ class VentanaGestionLibreria(QMainWindow):
             self.main_menu_widget.setStyleSheet("QWidget { background-color: #D32F2F; }")
         else:
             self.main_menu_widget.setStyleSheet("QWidget { background: transparent; }")
+        self.main_menu_widget.setGraphicsEffect(self.blur_effect)
         self.current_search_results_window = None
 
     def _iniciar_busqueda_desde_componente(self, termino_busqueda: str, filtros: dict):
@@ -129,15 +135,15 @@ class VentanaGestionLibreria(QMainWindow):
         dialog.exec()
 
     def _open_sell_book_dialog(self):
-        blur_effect = QGraphicsBlurEffect()
-        blur_effect.setBlurRadius(15)
-        self.main_menu_widget.setGraphicsEffect(blur_effect)
+        self.blur_effect.setEnabled(True)
+        self.main_menu_widget.setGraphicsEffect(self.blur_effect)
 
-        try:
-            dialog = SellBookDialog(self.book_service, self.sell_service, self)
-            dialog.exec()
-        finally:
-            self.main_menu_widget.setGraphicsEffect(None)
+        dialog = SellBookDialog(self.book_service, self.sell_service, self)
+        dialog.setModal(True)
+        
+        dialog.finished.connect(lambda: self.blur_effect.setEnabled(False))
+        
+        dialog.show()
 
     def _open_view_reservations_dialog(self):
         QTimer.singleShot(0, lambda: self._create_and_exec_view_reservations_dialog())

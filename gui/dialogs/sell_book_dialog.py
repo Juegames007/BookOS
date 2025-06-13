@@ -85,10 +85,7 @@ class SaleItemWidget(QFrame):
         title_label.setFont(QFont("Montserrat", 10, QFont.Weight.DemiBold))
         title_label.setStyleSheet("color: #1A202C; background: transparent; border: none;")
 
-        if item_id.startswith('promo_'):
-            details_text = "Promoción"
-        else:
-            details_text = f"Cant: {quantity}"
+        details_text = f"Cantidad: {quantity}"
         
         details_label = QLabel(details_text)
         details_label.setFont(QFont("Montserrat", 9))
@@ -274,14 +271,12 @@ class SellBookDialog(QDialog):
         self.is_content_expanded = True
     
     def _reposition_window(self):
-        # La llamada a resize/adjustSize no es suficiente para algunos gestores de ventanas
-        # de Linux cuando la ventana no tiene bordes. Forzamos una actualización
-        # del layout y luego usamos activateWindow() para darle un "empujón" al
-        # gestor de ventanas sin los efectos secundarios de hide/show.
-        self.layout().activate()
+        # Forzar la reactualización de la geometría ocultando y mostrando la ventana.
+        # Es un método más robusto para que el gestor de ventanas (KDE) procese el cambio.
+        self.hide()
         self.adjustSize()
         self._center_window()
-        self.activateWindow()
+        self.show()
 
     def _center_window(self):
         """Centra la ventana respecto al widget padre o la pantalla."""
@@ -358,10 +353,22 @@ class SellBookDialog(QDialog):
         isbn = self.isbn_input.text().strip()
         if not isbn:
             return
+
+        # Comprobar cuántas unidades de este libro ya están en el carrito
+        current_count_in_cart = sum(1 for item in self.raw_sale_items if item.get('id') == isbn)
         
-        book_data = self.sell_service.find_book_by_isbn_for_sale(isbn)
-        if book_data:
-            self.add_item_to_sale(book_data)
+        result = self.sell_service.find_book_by_isbn_for_sale(isbn)
+        
+        if result:
+            book_data = result['book_data']
+            stock = result['stock']
+            
+            if current_count_in_cart < stock:
+                self.add_item_to_sale(book_data)
+            else:
+                QMessageBox.warning(self, "Stock insuficiente", 
+                                    f"No hay más unidades disponibles en el inventario para el libro con ISBN: {isbn}. "
+                                    f"Ya tiene {current_count_in_cart} en la venta.")
         else:
             QMessageBox.warning(self, "Libro no encontrado", f"No se encontró un libro disponible con el ISBN: {isbn}")
         self.isbn_input.clear()
@@ -371,7 +378,7 @@ class SellBookDialog(QDialog):
         if dialog.exec() == QDialog.Accepted:
             price, quantity = dialog.get_values()
             disc_data = {
-                'id': f'disc_{uuid.uuid4()}',
+                'id': f'disc_{int(price)}',
                 'titulo': 'Disco Musical',
                 'precio': price,
                 'cantidad': quantity
@@ -380,7 +387,7 @@ class SellBookDialog(QDialog):
 
     def _add_promo_item(self):
         promo_data = {
-            'id': f'promo_{uuid.uuid4()}',
+            'id': 'promo_10000',
             'titulo': 'Promoción de Libro',
             'precio': 10000,
             'cantidad': 1

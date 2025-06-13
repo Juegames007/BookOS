@@ -10,7 +10,7 @@ class SellService:
     def find_book_by_isbn_for_sale(self, isbn: str) -> Optional[Dict[str, Any]]:
         """
         Busca un libro por su ISBN y verifica si hay stock para la venta.
-        Devuelve un diccionario con los datos del libro si está disponible.
+        Devuelve un diccionario con los datos del libro y el stock disponible.
         """
         search_result = self.book_service.buscar_libro_por_isbn(isbn)
         
@@ -20,10 +20,13 @@ class SellService:
             if total_quantity > 0:
                 book_details = search_result["book_details"]
                 return {
-                    'id': book_details["ISBN"],
-                    'titulo': book_details["Título"],
-                    'precio': book_details.get("Precio", 0),
-                    'cantidad': 1
+                    'book_data': {
+                        'id': book_details["ISBN"],
+                        'titulo': book_details["Título"],
+                        'precio': book_details.get("Precio", 0),
+                        'cantidad': 1
+                    },
+                    'stock': total_quantity
                 }
                 
         return None
