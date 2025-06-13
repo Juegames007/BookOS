@@ -37,9 +37,9 @@ class SearchBarWidget(QFrame):
         # self.setFixedWidth(ancho_deseado) 
         self.setStyleSheet(f"""
             QFrame#searchBarContainer {{
-                background-color: rgba(255, 255, 255, 90);
-                border-radius: 15px;
-                border: 1px solid rgba(200, 200, 200, 100);
+                background-color: rgba(255, 255, 255, 89);
+                border-radius: 16px;
+                border: 0.5px solid white;
             }}
         """)
 

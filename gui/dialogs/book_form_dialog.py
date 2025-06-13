@@ -132,8 +132,8 @@ class BookFormDialog(QDialog):
         self.unified_form_frame.setStyleSheet(f"""
             QFrame#unifiedFormFrame {{
                 background-color: {COLORS.get('background_light', 'rgba(255, 255, 255, 0.8)')} !important;
-                border-radius: 18px !important;
-                border: 1px solid {COLORS.get('border_light', 'rgba(200, 200, 200, 0.6)')} !important;
+                border-radius: 16px !important;
+                border: 0.5px solid white !important;
                 padding: 20px;
             }}
             QLabel#dialogTitleLabel {{

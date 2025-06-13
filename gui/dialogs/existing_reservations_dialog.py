@@ -135,8 +135,8 @@ class ReservedItemWidget(QFrame):
         self.setFrameStyle(QFrame.StyledPanel | QFrame.Plain)
         self.setStyleSheet("""
             ReservedItemWidget {
-                background-color: rgba(255, 255, 255, 0.7);
-                border: 1px solid rgba(0, 0, 0, 0.1);
+                background-color: rgba(255, 255, 255, 0.5);
+                border: 0.5px solid white;
                 border-radius: 10px;
                 padding: 8px;
             }
@@ -217,9 +217,11 @@ class ExistingReservationsDialog(QDialog):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setBrush(QColor(226, 232, 240, 100))
-        painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(self.rect(), 15, 15)
+        painter.setBrush(QColor(255, 255, 255, 150))
+        pen = QPen(QColor("white"))
+        pen.setWidthF(0.5)
+        painter.setPen(pen)
+        painter.drawRoundedRect(self.rect(), 16, 16)
 
     @Property(QPoint)
     def current_view_pos(self):

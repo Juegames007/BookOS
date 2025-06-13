@@ -164,8 +164,8 @@ class ReservationDialog(QDialog):
         container_frame.setObjectName("containerFrame")
         container_frame.setStyleSheet(f"""
             QFrame#containerFrame {{
-                background-color: rgba(255, 255, 255, 0.35);
-                border: 1px solid rgba(255, 255, 255, 0.2);
+                background-color: rgba(255, 255, 255, 0.5);
+                border: 0.5px solid white;
                 border-radius: 16px;
             }}
         """)
