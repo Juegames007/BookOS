@@ -91,7 +91,7 @@ class VentanaGestionLibreria(QMainWindow):
 
     def _iniciar_busqueda_desde_componente(self, termino_busqueda: str, filtros: dict):
         if not termino_busqueda: return
-        libros_encontrados = self.book_service.buscar_libros(termino_busqueda)
+        libros_encontrados = self.book_service.buscar_libros(termino_busqueda, filtros)
         if hasattr(self, 'current_search_results_window') and self.current_search_results_window:
             self.current_search_results_window.close()
         self.current_search_results_window = SearchResultsWindow(

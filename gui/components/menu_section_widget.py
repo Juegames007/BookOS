@@ -49,7 +49,7 @@ class MenuSectionWidget(QWidget):
 
         opciones_inventario_main = [
             {"icon": "agregar.png", "text": "  Agregar", "action": "Agregar Libro"},
-            {"icon": "eliminar.png", "text": "  Eliminar Libro", "action": "Eliminar Libro"},
+            {"icon": "eliminar.png", "text": "  Eliminar", "action": "Eliminar Libro"},
         ]
         inventario_card_principal = MainMenuCard(opciones_inventario_main, card_width, main_card_2_btn_height, "Inventario")
         inventario_card_principal.action_triggered.connect(self.action_triggered.emit)

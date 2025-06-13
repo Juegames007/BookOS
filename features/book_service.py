@@ -135,20 +135,50 @@ class BookService:
         except Exception as e:
             return False, f"Error al modificar inventario: {str(e)}"
 
-    def buscar_libros(self, termino: str) -> List[Dict[str, Any]]:
+    def buscar_libros(self, termino: str, filtros: Optional[Dict[str, bool]] = None) -> List[Dict[str, Any]]:
         query = """
             SELECT l.isbn, l.titulo, l.autor, l.editorial, l.imagen_url, l.categorias, l.precio_venta, i.posicion, i.cantidad
             FROM libros l LEFT JOIN inventario i ON l.isbn = i.libro_isbn
-            WHERE normalize(l.titulo) LIKE ? OR normalize(l.autor) LIKE ? OR normalize(l.editorial) LIKE ? OR l.isbn LIKE ?
-            ORDER BY l.titulo
         """
-        # Normalizamos el término de búsqueda del usuario ANTES de pasarlo a la consulta
-        normalized_search_term = f"%{normalize_for_search(termino)}%"
-        # El ISBN no necesita normalización, así que lo mantenemos separado
-        isbn_search_term = f"%{termino}%"
-        params = (normalized_search_term, normalized_search_term, normalized_search_term, isbn_search_term)
         
-        results = self.data_manager.fetch_query(query, params)
+        where_clauses = []
+        params = []
+        
+        normalized_search_term = f"%{normalize_for_search(termino)}%"
+        isbn_search_term = f"%{termino}%"
+
+        # Si no hay filtros o están todos en False, buscar en todo.
+        if not filtros or not any(filtros.values()):
+            where_clauses.extend([
+                "normalize(l.titulo) LIKE ?",
+                "normalize(l.autor) LIKE ?",
+                "normalize(l.editorial) LIKE ?",
+                "normalize(l.categorias) LIKE ?",
+                "l.isbn LIKE ?"
+            ])
+            params.extend([normalized_search_term, normalized_search_term, normalized_search_term, normalized_search_term, isbn_search_term])
+        else:
+            # Construir cláusula WHERE basada en filtros activos
+            if filtros.get("titulo"):
+                where_clauses.append("normalize(l.titulo) LIKE ?")
+                params.append(normalized_search_term)
+            if filtros.get("autor"):
+                where_clauses.append("normalize(l.autor) LIKE ?")
+                params.append(normalized_search_term)
+            if filtros.get("categoria"):
+                where_clauses.append("normalize(l.categorias) LIKE ?")
+                params.append(normalized_search_term)
+            
+            # Siempre incluir búsqueda por ISBN
+            where_clauses.append("l.isbn LIKE ?")
+            params.append(isbn_search_term)
+
+        if not where_clauses:
+            return []
+
+        query += f" WHERE {' OR '.join(where_clauses)} ORDER BY l.titulo"
+        
+        results = self.data_manager.fetch_query(query, tuple(params))
         
         books = []
         for row in results:

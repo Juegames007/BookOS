@@ -144,9 +144,9 @@ class SearchBarWidget(QFrame):
         filter_options_grid_layout.setVerticalSpacing(10)
 
         filter_data = [
-            ("Título", "filter_by_title_cb", "titulo.png"),
-            ("Autor", "filter_by_author_cb", "autor.png"),
-            ("Categoría", "filter_by_category_cb", "categoria.png")
+            ("Título", "filter_by_titulo_cb", "titulo.png"),
+            ("Autor", "filter_by_autor_cb", "autor.png"),
+            ("Categoría", "filter_by_categoria_cb", "categoria.png")
         ]
         
         checkbox_icon_size = QSize(16, 16)
@@ -155,7 +155,7 @@ class SearchBarWidget(QFrame):
         row, col = 0, 0
         for text, attr_name, icon_filename in filter_data:
             checkbox = QCheckBox(text)
-            checkbox.setChecked(True)
+            checkbox.setChecked(False)
             checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
             
             icon_path = os.path.join(icon_base_dir, icon_filename)
