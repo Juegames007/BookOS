@@ -137,7 +137,7 @@ class VentanaGestionLibreria(QMainWindow):
         QTimer.singleShot(0, lambda: self._create_and_exec_reservation_dialog())
 
     def _create_and_exec_reservation_dialog(self):
-        dialog = ReservationDialog(self.reservation_service, self)
+        dialog = ReservationDialog(self.reservation_service, self, blur_effect=self.blur_effect)
         dialog.exec()
 
     def _open_sell_book_dialog(self):

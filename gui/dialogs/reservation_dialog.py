@@ -125,7 +125,7 @@ class ReservationDialog(QDialog):
     """
     Diálogo moderno para gestionar la reserva y visualización de libros apartados.
     """
-    def __init__(self, reservation_service: ReservationService, parent=None):
+    def __init__(self, reservation_service: ReservationService, parent=None, blur_effect=None):
         super().__init__(parent)
         self.reservation_service = reservation_service
         self.setWindowTitle("Nueva Reserva o Venta")
@@ -146,14 +146,9 @@ class ReservationDialog(QDialog):
         self.current_page = 0
         self.items_per_page = 6
 
-        self._blur_effect = None
-        if self.parent():
-            self._blur_effect = QGraphicsBlurEffect()
-            self._blur_effect.setBlurRadius(15)
+        self._blur_effect = blur_effect
+        if self._blur_effect:
             self._blur_effect.setEnabled(False)
-            target_widget = self.parent().centralWidget() if hasattr(self.parent(), 'centralWidget') else self.parent()
-            if target_widget:
-                target_widget.setGraphicsEffect(self._blur_effect)
 
         self.setModal(True)
 
@@ -812,7 +807,7 @@ class ReservationDialog(QDialog):
             page_item_groups = list(grouped_items.values())[start_index:end_index]
 
             for group in page_item_groups:
-                first_item = group['items'][0]
+                first_item = group['data']
                 count = group['count']
                 
                 item_widget = BookItemWidget(first_item, count)
@@ -924,15 +919,14 @@ class ReservationDialog(QDialog):
             QMessageBox.critical(self, "Error", f"No se pudo completar la operación:\n{message}")
 
     def _group_items(self, items_list: list) -> dict:
-        """Agrupa una lista de items por su clave de agrupación (ISBN o ID)."""
+        """Agrupa los items por ISBN (para libros) o por su ID único (para otros)."""
         grouped = {}
         for item in items_list:
-            # Clave de agrupación: ISBN para libros, ID único para el resto.
-            group_key = item.get('libro_isbn') or item.get('id')
-            if group_key not in grouped:
-                grouped[group_key] = {'items': [], 'count': 0}
-            grouped[group_key]['items'].append(item)
-            grouped[group_key]['count'] += 1
+            # La clave de agrupación es el ISBN o el ID
+            key = item.get('libro_isbn') or item.get('id')
+            if key not in grouped:
+                grouped[key] = {'data': item, 'count': 0}
+            grouped[key]['count'] += 1
         return grouped
 
     def _enable_blur(self, enable: bool):
@@ -950,7 +944,7 @@ class ReservationDialog(QDialog):
         super().reject()
 
     def mousePressEvent(self, event: QMouseEvent):
-        if event.button() == Qt.MouseButton.LeftButton and event.pos().y() < self.top_bar_height:
+        if event.button() == Qt.MouseButton.LeftButton and event.pos().y() <= self.top_bar_height:
             self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
             event.accept()
 
