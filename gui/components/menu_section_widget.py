@@ -57,7 +57,7 @@ class MenuSectionWidget(QWidget):
         
         opciones_inventario_extra = [
             {"icon": "apartar.png", "text": "  Reservas", "action": "Apartar / Ver"},
-            {"icon": "devoluciones.png", "text": "  Devolución", "action": "Registrar Devolucion"},
+            {"icon": "devoluciones.png", "text": "  Devolución", "action": "Devoluciones"},
         ]
         inventario_card_extra = MainMenuCard(opciones_inventario_extra, card_width, extra_card_height)
         inventario_card_extra.action_triggered.connect(self.action_triggered.emit)

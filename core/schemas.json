@@ -39,6 +39,14 @@
       {
         "nombre": "historial_busquedas",
         "definicion": "(id_busqueda INTEGER PRIMARY KEY AUTOINCREMENT, termino_buscado TEXT NOT NULL, fecha_busqueda DATETIME DEFAULT (datetime('now')), resultados_encontrados INTEGER DEFAULT 0)"
+      },
+      {
+        "nombre": "devoluciones",
+        "definicion": "(id_devolucion INTEGER PRIMARY KEY AUTOINCREMENT, monto_total REAL NOT NULL, notas TEXT, fecha_devolucion DATETIME DEFAULT (datetime('now')))"
+      },
+      {
+        "nombre": "detalles_devolucion",
+        "definicion": "(id_detalle_devolucion INTEGER PRIMARY KEY AUTOINCREMENT, id_devolucion INTEGER NOT NULL, libro_isbn TEXT, descripcion_item TEXT, cantidad INTEGER NOT NULL, precio_unitario_devolucion REAL NOT NULL, FOREIGN KEY (id_devolucion) REFERENCES devoluciones (id_devolucion) ON DELETE CASCADE)"
       }
     ]
   }

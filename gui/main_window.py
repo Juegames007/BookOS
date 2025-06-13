@@ -27,9 +27,11 @@ from gui.dialogs.reservation_options_dialog import ReservationOptionsDialog
 from gui.dialogs.existing_reservations_dialog import ExistingReservationsDialog
 from gui.components.menu_section_widget import MenuSectionWidget
 from gui.dialogs.sell_book_dialog import SellBookDialog
+from gui.dialogs.return_dialog import ReturnDialog
 from features.book_service import BookService
 from features.reservation_service import ReservationService
 from features.sell_service import SellService
+from features.return_service import ReturnService
 from gui.dialogs.search_results_window import SearchResultsWindow
 from core.sqlmanager import SQLManager
 
@@ -54,6 +56,7 @@ class VentanaGestionLibreria(QMainWindow):
         self.book_service = BookService(self.data_manager, self.book_info_service)
         self.reservation_service = ReservationService(self.data_manager)
         self.sell_service = SellService(self.data_manager, self.book_service)
+        self.return_service = ReturnService(self.data_manager)
 
         target_width, target_height = 1366, 768
         try:
@@ -127,6 +130,9 @@ class VentanaGestionLibreria(QMainWindow):
         elif accion_limpia == "Vender Libro":
             self._open_sell_book_dialog()
 
+        elif accion_limpia == "Devoluciones":
+            self._open_return_dialog()
+
         elif accion_limpia == "Apartar / Ver":
             options_dialog = ReservationOptionsDialog(self)
             options_dialog.new_reservation_requested.connect(self._open_reservation_dialog)
@@ -140,12 +146,23 @@ class VentanaGestionLibreria(QMainWindow):
         dialog = ReservationDialog(self.reservation_service, self, blur_effect=self.blur_effect)
         dialog.exec()
 
+    def _open_return_dialog(self):
+        self.blur_effect.setEnabled(True)
+        self.current_dialog = ReturnDialog(self.return_service, self)
+        self.current_dialog.setModal(True)
+        self.current_dialog.finished.connect(self._on_dialog_finished)
+        self.current_dialog.show()
+
     def _open_sell_book_dialog(self):
         self.blur_effect.setEnabled(True)
         self.current_dialog = SellBookDialog(self.book_service, self.sell_service, self)
         self.current_dialog.setModal(True)
         self.current_dialog.finished.connect(self._on_sell_dialog_finished)
         self.current_dialog.show()
+
+    def _on_dialog_finished(self):
+        self.blur_effect.setEnabled(False)
+        self.current_dialog = None
 
     def _on_sell_dialog_finished(self):
         self.blur_effect.setEnabled(False)

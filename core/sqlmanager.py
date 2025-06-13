@@ -122,7 +122,7 @@ class SQLManager(DataManagerInterface):
         query = f"CREATE TABLE IF NOT EXISTS {hoja_nombre} {stripped_cols_def}"
         
         # execute_query ya tiene un try-except para errores de SQLite
-        self.execute_query(query)
+        cursor = self.execute_query(query)
         
         if cursor is not None: # execute_query retorna None en caso de error de ejecución SQL
             # No podemos saber directamente desde el cursor si CREATE TABLE IF NOT EXISTS
