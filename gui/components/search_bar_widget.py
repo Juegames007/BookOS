@@ -18,9 +18,18 @@ class SearchBarWidget(QFrame):
         self.search_bar_base_height = 55
         self._filters_visible = False
         self.filter_checkboxes_effects = []
-        self.animation_group = QParallelAnimationGroup(self)
+        self.animation_group = None # Se creará bajo demanda
         
         self._setup_ui()
+
+    def __del__(self):
+        # Desconectar para evitar advertencias al cerrar
+        # Aunque ahora el grupo es efímero, esto no hace daño como salvaguarda
+        if self.animation_group:
+            try:
+                self.animation_group.finished.disconnect(self._on_filter_animation_group_finished)
+            except (RuntimeError, TypeError):
+                pass
 
     def _setup_ui(self):
         self.setObjectName("searchBarContainer")
@@ -192,21 +201,24 @@ class SearchBarWidget(QFrame):
         if not hasattr(self, 'filter_options_widget') or not (hasattr(self, 'filter_checkboxes_effects') and bool(self.filter_checkboxes_effects)):
             return
 
-        if self.animation_group.state() == QParallelAnimationGroup.State.Running:
+        if self.animation_group and self.animation_group.state() == QParallelAnimationGroup.State.Running:
             self.animation_group.stop()
-        self.animation_group.clear()
+
+        # Crear un nuevo grupo de animación para cada toggle
+        self.animation_group = QParallelAnimationGroup(self)
+        self.animation_group.finished.connect(self._on_filter_animation_group_finished)
+        # Asegurar que el grupo se destruya a sí mismo después de terminar
+        self.animation_group.finished.connect(self.animation_group.deleteLater)
 
         height_anim_duration = 280
         opacity_anim_duration = 150
 
-        self.filter_options_widget.show() 
-        QApplication.processEvents()
         preferred_filter_height = self.filter_options_widget.sizeHint().height()
         if preferred_filter_height <= 0:
+            QApplication.processEvents()
             preferred_filter_height = self.filter_options_widget.layout().sizeHint().height()
         
-        if not self._filters_visible: # Si está oculto, vamos a mostrar
-            self.filter_options_widget.hide() 
+        current_height = self.filter_options_widget.height()
 
         if self._filters_visible:  # Ocultar filtros
             target_container_height = 0
@@ -214,7 +226,7 @@ class SearchBarWidget(QFrame):
             
             height_animation = QPropertyAnimation(self.filter_options_widget, b"maximumHeight")
             height_animation.setDuration(height_anim_duration)
-            height_animation.setStartValue(preferred_filter_height)
+            height_animation.setStartValue(current_height)
             height_animation.setEndValue(target_container_height)
             height_animation.setEasingCurve(QEasingCurve.Type.InQuad)
             self.animation_group.addAnimation(height_animation)
@@ -226,11 +238,6 @@ class SearchBarWidget(QFrame):
                 opacity_anim.setEndValue(target_opacity)
                 opacity_anim.setEasingCurve(QEasingCurve.Type.InSine)
                 self.animation_group.addAnimation(opacity_anim)
-            
-            # Intentar desconectar antes de conectar para evitar múltiples conexiones
-            try: self.animation_group.finished.disconnect(self._on_filter_animation_group_finished)
-            except RuntimeError: pass
-            self.animation_group.finished.connect(self._on_filter_animation_group_finished)
 
         else:  # Mostrar filtros
             if preferred_filter_height <= 0: return
@@ -238,11 +245,11 @@ class SearchBarWidget(QFrame):
             target_container_height = preferred_filter_height
             target_opacity = 1.0
             self.filter_options_widget.show()
-            self.filter_options_widget.setMaximumHeight(0)
+            self.filter_options_widget.setMaximumHeight(current_height)
 
             height_animation = QPropertyAnimation(self.filter_options_widget, b"maximumHeight")
             height_animation.setDuration(height_anim_duration)
-            height_animation.setStartValue(0)
+            height_animation.setStartValue(current_height)
             height_animation.setEndValue(target_container_height)
             height_animation.setEasingCurve(QEasingCurve.Type.OutQuad)
             self.animation_group.addAnimation(height_animation)
@@ -255,23 +262,24 @@ class SearchBarWidget(QFrame):
                 opacity_anim.setEndValue(target_opacity)
                 opacity_anim.setEasingCurve(QEasingCurve.Type.OutSine)
                 self.animation_group.addAnimation(opacity_anim)
-            
-            # No conectar finished al mostrar, _on_filter_animation_group_finished es para el post-ocultar
-
+        
         self.animation_group.start()
         self._filters_visible = not self._filters_visible
 
     def _on_filter_animation_group_finished(self):
+        # Si el emisor no es el grupo de animación actual, significa que es una
+        # señal de un grupo antiguo que fue detenido. La ignoramos para no anular
+        # la referencia al nuevo grupo que ya está en curso.
+        if self.sender() is not self.animation_group:
+            return
+
+        # El estado de visibilidad ya ha sido cambiado en _toggle_filter_expansion.
         if not self._filters_visible:
             self.filter_options_widget.hide()
-            for item_data in self.filter_checkboxes_effects:
-                item_data["effect"].setOpacity(0.0)
-        # Desconectar para evitar que se llame incorrectamente después.
-        try:
-            self.animation_group.finished.disconnect(self._on_filter_animation_group_finished)
-        except RuntimeError: 
-            pass
 
+        # El grupo de animación actual ha terminado, por lo que borramos la referencia.
+        self.animation_group = None
+            
 if __name__ == '__main__':
     # Ejemplo de uso básico (requiere que el QApplication se ejecute)
     app = QApplication([])

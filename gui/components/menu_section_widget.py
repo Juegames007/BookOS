@@ -34,11 +34,9 @@ class MenuSectionWidget(QWidget):
         layout_cards_holder.addStretch(1)
 
         card_width = 275  # Manteniendo el ancho de tarjeta que establecimos
-        main_card_height = 280
-        extra_card_height = 160 
-        # Nueva altura para la tarjeta de estadísticas, puede ser similar a extra_card_height
-        # o ajustarse según el número de botones. Con 2 botones, podría ser más pequeña.
-        stats_card_height = 140 # Estimación para 2 botones, ajustar si es necesario
+        main_card_3_btn_height = 280
+        main_card_2_btn_height = 220
+        extra_card_height = 150 # Altura para las tarjetas secundarias
 
         card_spacing = 15
 
@@ -51,18 +49,20 @@ class MenuSectionWidget(QWidget):
 
         opciones_inventario_main = [
             {"icon": "agregar.png", "text": "  Agregar", "action": "Agregar Libro"},
-            {"icon": "apartar.png", "text": "  Reservas", "action": "Apartar / Ver"},
-            {"icon": "modificar.png", "text": "  Mod. Inventario", "action": "Modificar Libro"}
+            {"icon": "eliminar.png", "text": "  Eliminar Libro", "action": "Eliminar Libro"},
         ]
-        inventario_card_principal = MainMenuCard(opciones_inventario_main, card_width, main_card_height, "Inventario")
+        inventario_card_principal = MainMenuCard(opciones_inventario_main, card_width, main_card_2_btn_height, "Inventario")
         inventario_card_principal.action_triggered.connect(self.action_triggered.emit)
         layout_inventario_columna.addWidget(inventario_card_principal)
         
-        # Tarjeta de relleno para inventario para alinear alturas si otras columnas crecen
-        inventario_card_relleno = MainMenuCard([], card_width, 
-                                               extra_card_height + card_spacing + stats_card_height) # Ajustar altura de relleno
-        inventario_card_relleno.setVisible(False) 
-        layout_inventario_columna.addWidget(inventario_card_relleno)
+        opciones_inventario_extra = [
+            {"icon": "apartar.png", "text": "  Reservas", "action": "Apartar / Ver"},
+            {"icon": "devoluciones.png", "text": "  Devolución", "action": "Registrar Devolucion"},
+        ]
+        inventario_card_extra = MainMenuCard(opciones_inventario_extra, card_width, extra_card_height)
+        inventario_card_extra.action_triggered.connect(self.action_triggered.emit)
+        layout_inventario_columna.addWidget(inventario_card_extra)
+
         layout_inventario_columna.addStretch(1)
         layout_cards_holder.addWidget(inventario_columna_widget)
 
@@ -80,34 +80,12 @@ class MenuSectionWidget(QWidget):
 
         opciones_finanzas_main = [
             {"icon": "vender.png", "text": "  Vender", "action": "Vender Libro"},
-            {"icon": "ingreso.png", "text": "  Anotar Ingreso", "action": "Reportar Ingreso"},
-            {"icon": "gasto.png", "text": "  Anotar Gasto", "action": "Reportar Gasto"},
+            {"icon": "gasto.png", "text": "  Egreso", "action": "Reportar Gasto"},
+            {"icon": "estadisticas.png", "text": "  Estadísticas", "action": "Ver Estadisticas"},
         ]
-        # Ajustar altura de la tarjeta principal de finanzas si es necesario
-        # Por ahora, la dejamos igual. Si se ve muy apretada, se puede reducir su contenido o altura.
-        finanzas_card_principal = MainMenuCard(opciones_finanzas_main, card_width, main_card_height, "Finanzas")
+        finanzas_card_principal = MainMenuCard(opciones_finanzas_main, card_width, main_card_3_btn_height, "Finanzas")
         finanzas_card_principal.action_triggered.connect(self.action_triggered.emit)
         layout_finanzas_columna.addWidget(finanzas_card_principal)
-
-        # Tarjeta extra original de finanzas
-        opciones_finanzas_extra = [
-            {"icon": "contabilidad.png", "text": "  Ver Finanzas", "action": "Ver Finanzas"}, # Asume que tienes un icono ver_finanzas.png
-            {"icon": "pedidos.png", "text": "  Ver Pedidos", "action": "Ver Pedidos"}
-        ]
-        # Ajustar la altura de finanzas_card_extra si es necesario
-        # La altura disponible para finanzas_card_extra ahora debe considerar la nueva tarjeta de estadísticas.
-        # Por ahora, la dejamos con su cálculo original, podría necesitar ajuste manual o hacerse más pequeña.
-        # altura_disponible_finanzas_extra = extra_card_height 
-        # (Esta línea no estaba, pero es para pensar la lógica)
-        
-        # Si finanzas_card_extra y stats_card van en el mismo espacio vertical que extra_card_height
-        # de las otras columnas, hay que dividir esa altura.
-        # O, si la columna de finanzas puede ser más alta, entonces no hay problema.
-        # Asumamos que la columna de finanzas puede crecer.
-        
-        finanzas_card_extra = MainMenuCard(opciones_finanzas_extra, card_width, extra_card_height) # Sin título explícito, usará el espacio
-        finanzas_card_extra.action_triggered.connect(self.action_triggered.emit)
-        layout_finanzas_columna.addWidget(finanzas_card_extra)
 
         layout_finanzas_columna.addStretch(1)
         layout_cards_holder.addWidget(finanzas_columna_widget)
@@ -120,20 +98,21 @@ class MenuSectionWidget(QWidget):
         layout_ajustes_columna.setSpacing(card_spacing)
 
         opciones_ajustes_main = [
+            {"icon": "modificar.png", "text": "  Mod. Inventario", "action": "Modificar Libro"},
             {"icon": "ajustes_finanzas.png", "text": "  Mod. Finanzas", "action": "Modificar Finanzas"},
-            {"icon": "eliminar.png", "text": "  Eliminar Libro", "action": "Eliminar Libro"},
-            {"icon": "salir.png", "text": "  Salir", "action": "SALIR_APP"}
         ]
-        ajustes_card_principal = MainMenuCard(opciones_ajustes_main, card_width, main_card_height, "Ajustes")
+        ajustes_card_principal = MainMenuCard(opciones_ajustes_main, card_width, main_card_2_btn_height, "Ajustes")
         ajustes_card_principal.action_triggered.connect(self.action_triggered.emit)
         layout_ajustes_columna.addWidget(ajustes_card_principal)
         
-        # Tarjeta de relleno para ajustes para alinear alturas
-        # Debe ser igual a la altura de relleno de inventario para mantener la simetría
-        ajustes_card_relleno = MainMenuCard([], card_width, 
-                                            extra_card_height + card_spacing + stats_card_height) # Ajustar altura de relleno
-        ajustes_card_relleno.setVisible(False)
-        layout_ajustes_columna.addWidget(ajustes_card_relleno)
+        opciones_ajustes_extra = [
+            {"icon": "configuracion.png", "text": "  Configuración", "action": "Abrir Configuracion"},
+            {"icon": "salir.png", "text": "  Salir", "action": "SALIR_APP"}
+        ]
+        ajustes_card_extra = MainMenuCard(opciones_ajustes_extra, card_width, extra_card_height)
+        ajustes_card_extra.action_triggered.connect(self.action_triggered.emit)
+        layout_ajustes_columna.addWidget(ajustes_card_extra)
+
         layout_ajustes_columna.addStretch(1)
         layout_cards_holder.addWidget(ajustes_columna_widget)
 

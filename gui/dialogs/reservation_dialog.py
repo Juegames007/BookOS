@@ -83,20 +83,21 @@ class BookItemWidget(QFrame):
         layout.setSpacing(8)
         
         # --- Lógica de texto REFACTORIZADA ---
-        price = self.book_data.get('precio_venta', 0)
-        price_str = format_price_with_thousands_separator(price)
+        unit_price = self.book_data.get('precio_venta', 0)
+        total_price = unit_price * self.count
+        price_str = format_price_with_thousands_separator(total_price)
 
         if 'titulo' in self.book_data:
             # Es un libro
             info = f"{self.book_data['titulo']} (Pos: {self.book_data.get('posicion', 'N/A')})"
             full_text = f"{info} - {price_str}"
         else:
-            # Es un item genérico (la descripción NO contiene el precio)
+            # Es un item genérico
             base_description = self.book_data.get('descripcion', 'Item Desconocido')
             full_text = f"{base_description} - {price_str}"
 
-        # El contador solo se aplica a libros (items que se agrupan)
-        count_str = f" (x{self.count})" if self.count > 1 and 'titulo' in self.book_data else ""
+        # El contador se aplica a CUALQUIER item agrupado.
+        count_str = f" (x{self.count})" if self.count > 1 else ""
         final_text = f"{full_text}{count_str}"
         
         self.info_label = ElidedLabel(final_text)
@@ -615,24 +616,32 @@ class ReservationDialog(QDialog):
         self.isbn_input.clear()
 
     def add_promo_item(self):
-        promo_data = {
-            'id': f"promo_{uuid.uuid4()}",
-            'descripcion': 'Promoción',
-            'precio_venta': 10000
-        }
-        self.add_book_item(promo_data)
+        dialog = PriceInputDialog(self, title="Agregar Promoción", show_quantity=True, default_price=10000)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            price, quantity = dialog.get_values()
+            if price > 0:
+                promo_id = f"promo_{uuid.uuid4()}"
+                for _ in range(quantity):
+                    promo_data = {
+                        'id': promo_id,
+                        'descripcion': 'Promoción',
+                        'precio_venta': price
+                    }
+                    self.add_book_item(promo_data)
 
     def add_disc_item(self):
-        dialog = PriceInputDialog(self, title="Precio del Disco")
+        dialog = PriceInputDialog(self, title="Precio del Disco", show_quantity=True)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            price = dialog.get_price()
+            price, quantity = dialog.get_values()
             if price > 0:
-                disc_data = {
-                    'id': f"disc_{uuid.uuid4()}",
-                    'descripcion': 'Disco',
-                    'precio_venta': price
-                }
-                self.add_book_item(disc_data)
+                disc_id = f"disc_{uuid.uuid4()}"
+                for _ in range(quantity):
+                    disc_data = {
+                        'id': disc_id,
+                        'descripcion': 'Disco',
+                        'precio_venta': price
+                    }
+                    self.add_book_item(disc_data)
 
     def get_base_total(self):
         """Calcula el total a partir de los precios originales en la lista maestra."""
@@ -662,7 +671,7 @@ class ReservationDialog(QDialog):
 
         # Mover a la página donde está el nuevo item
         # Como no hay descuento, reserved_items y displayed_items son equivalentes
-        new_item_group_key = book_data.get('libro_isbn') or book_data.get('id')
+        new_item_group_key = self._get_item_group_key(book_data)
         
         # Agrupamos la lista de reserva para encontrar el índice del grupo del nuevo item.
         grouped_items = self._group_items(self.reserved_items)
@@ -690,9 +699,8 @@ class ReservationDialog(QDialog):
             discount_ratio = self.manual_total / base_total_before
 
         initial_count = len(self.reserved_items)
-        # La clave de eliminación coincide con la de agrupación
-        def get_item_id(item): return item.get('libro_isbn') or item.get('id')
-        self.reserved_items = [item for item in self.reserved_items if get_item_id(item) != group_id_to_remove]
+        # La clave de eliminación ahora coincide con la nueva lógica de agrupación.
+        self.reserved_items = [item for item in self.reserved_items if self._get_item_group_key(item) != group_id_to_remove]
         
         if len(self.reserved_items) < initial_count:
             if discount_ratio is not None:
@@ -804,13 +812,15 @@ class ReservationDialog(QDialog):
             start_index = self.current_page * self.items_per_page
             end_index = start_index + self.items_per_page
             
-            page_item_groups = list(grouped_items.values())[start_index:end_index]
+            page_item_groups = list(grouped_items.items())[start_index:end_index]
 
-            for group in page_item_groups:
+            for group_key, group in page_item_groups:
                 first_item = group['data']
                 count = group['count']
                 
+                # Se pasa el group_key explícitamente al widget.
                 item_widget = BookItemWidget(first_item, count)
+                item_widget.group_id = group_key # Asignar la clave de grupo correcta
                 item_widget.remove_requested.connect(self.remove_book_group)
                 self.items_container_layout.addWidget(item_widget)
 
@@ -918,12 +928,24 @@ class ReservationDialog(QDialog):
         else:
             QMessageBox.critical(self, "Error", f"No se pudo completar la operación:\n{message}")
 
+    def _get_item_group_key(self, item: dict) -> str:
+        """
+        Devuelve la clave de agrupación para un item.
+        - Libros: por ISBN.
+        - Otros: por 'descripcion_precio'.
+        """
+        if 'libro_isbn' in item and item.get('libro_isbn'):
+            return item['libro_isbn']
+        else:
+            description = item.get('descripcion', 'generico').lower().replace(" ", "_")
+            price = item.get('precio_venta', 0)
+            return f"{description}_{price}"
+
     def _group_items(self, items_list: list) -> dict:
-        """Agrupa los items por ISBN (para libros) o por su ID único (para otros)."""
+        """Agrupa los items usando la clave de _get_item_group_key."""
         grouped = {}
         for item in items_list:
-            # La clave de agrupación es el ISBN o el ID
-            key = item.get('libro_isbn') or item.get('id')
+            key = self._get_item_group_key(item)
             if key not in grouped:
                 grouped[key] = {'data': item, 'count': 0}
             grouped[key]['count'] += 1
