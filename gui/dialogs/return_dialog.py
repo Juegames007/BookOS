@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QDialog, QHBoxLayout, QPushButton, QMessageBox, QWidget
+from PySide6.QtWidgets import QDialog, QHBoxLayout, QPushButton, QMessageBox
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QFont, QIcon
 
@@ -10,8 +10,8 @@ from gui.common.utils import get_icon_path
 class ReturnDialog(BaseTransactionDialog):
     
     def __init__(self, return_service: ReturnService, parent=None):
-        self.return_service = return_service
         super().__init__(parent)
+        self.return_service = return_service
 
     def get_dialog_title(self) -> str:
         return "Procesar Devolución"

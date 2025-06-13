@@ -139,12 +139,11 @@ class SaleItemWidget(QFrame):
         remove_btn.clicked.connect(lambda: self.remove_item.emit(item_id_to_remove))
 
 class SellBookDialog(BaseTransactionDialog):
-    NUM_ITEMS_PER_PAGE = 6
     
     def __init__(self, book_service: BookService, sell_service: SellService, parent=None):
+        super().__init__(parent)
         self.book_service = book_service
         self.sell_service = sell_service
-        super().__init__(parent)
 
     def get_dialog_title(self) -> str:
         return "Vender Artículos"

@@ -112,6 +112,7 @@ class SaleItemWidget(QFrame):
         remove_btn = QPushButton("×", self)
         remove_btn.setFixedSize(22, 22)
         remove_btn.setCursor(Qt.PointingHandCursor)
+        remove_btn.setAutoDefault(False)
         remove_btn.setStyleSheet("""
             QPushButton {
                 background-color: #FEE2E2;
@@ -344,7 +345,7 @@ class BaseTransactionDialog(QDialog):
             single_item = item_data.copy()
             single_item['cantidad'] = 1 
             self.transaction_items.append(single_item)
-
+        
         if not self.is_content_expanded:
             self._expand_and_recenter()
         
@@ -411,23 +412,28 @@ class BaseTransactionDialog(QDialog):
             grouped[group_key]['cantidad'] += item.get('cantidad', 1)
         return list(grouped.values())
 
-    def _remove_item_by_id(self, item_id_to_remove):
+    def _remove_item_by_id(self, item_id_to_remove: str):
+        """
+        Elimina UNA SOLA UNIDAD de un artículo de la venta por su ID.
+        Si hay varias unidades de un mismo artículo (agrupadas visualmente),
+        solo se decrementará la cuenta en la lista subyacente.
+        """
         self.manual_total = None
-        item_found = False
-        for i, item in enumerate(self.transaction_items):
-            if item.get('id') == item_id_to_remove:
+
+        # Iterar en reversa para evitar problemas al eliminar
+        for i in reversed(range(len(self.transaction_items))):
+            if self.transaction_items[i].get('id') == item_id_to_remove:
                 self.transaction_items.pop(i)
-                item_found = True
-                break
-        if item_found:
-            self._update_all_views()
+                self._update_all_views()
+                break # Salir después de eliminar solo una instancia
+        
         if not self.transaction_items and self.is_content_expanded:
             self._collapse_to_initial_state()
 
     def _collapse_to_initial_state(self):
         self.is_content_expanded = False
-        self.items_container.setVisible(False)
         self.footer_container.setVisible(False)
+        self.items_container.setVisible(False)
         self.page_nav_container.setVisible(False)
         QTimer.singleShot(0, self._reposition_window)
 

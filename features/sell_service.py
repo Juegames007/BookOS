@@ -86,7 +86,11 @@ class SellService:
             if not sale_id:
                 raise Exception("No se pudo crear el registro de venta.")
 
-            # 4. Iterar sobre los artículos, registrarlos en 'detalles_venta' y actualizar 'inventario'
+            # 4. Registrar el ingreso total de la venta
+            income_data = (total_amount, f"Ingreso por Venta #{sale_id}", sale_id)
+            cursor.execute("INSERT INTO ingresos (monto, concepto, id_venta) VALUES (?, ?, ?)", income_data)
+
+            # 5. Iterar sobre los artículos, registrarlos en 'detalles_venta' y actualizar 'inventario'
             for item in items:
                 isbn = item.get('id')
                 quantity_to_sell = item.get('cantidad', 1)
@@ -105,13 +109,11 @@ class SellService:
                     for entry_id, stock in inventory_entries:
                         if remaining_to_sell <= 0: break
                         
-                        if remaining_to_sell < stock:
-                            new_stock = stock - remaining_to_sell
-                            cursor.execute("UPDATE inventario SET cantidad = ?, fecha_actualizacion_cantidad = datetime('now') WHERE id_inventario = ?", (new_stock, entry_id))
-                            remaining_to_sell = 0
-                        else:
-                            cursor.execute("DELETE FROM inventario WHERE id_inventario = ?", (entry_id,))
-                            remaining_to_sell -= stock
+                        units_to_take = min(remaining_to_sell, stock)
+                        new_stock = stock - units_to_take
+                        
+                        cursor.execute("UPDATE inventario SET cantidad = ?, fecha_actualizacion_cantidad = datetime('now') WHERE id_inventario = ?", (new_stock, entry_id))
+                        remaining_to_sell -= units_to_take
                     
                     if remaining_to_sell > 0:
                         # Esta comprobación es una salvaguarda; el chequeo inicial debería haberlo prevenido.
