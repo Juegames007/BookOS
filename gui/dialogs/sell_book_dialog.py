@@ -134,7 +134,7 @@ class SellBookDialog(QDialog):
 
     def _setup_window(self):
         self.setWindowTitle("Sell Items")
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowSystemMenuHint)
+        self.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         
         self.main_frame = QFrame(self)
@@ -274,8 +274,14 @@ class SellBookDialog(QDialog):
         self.is_content_expanded = True
     
     def _reposition_window(self):
+        # La llamada a resize/adjustSize no es suficiente para algunos gestores de ventanas
+        # de Linux cuando la ventana no tiene bordes. Forzamos una actualización
+        # del layout y luego usamos activateWindow() para darle un "empujón" al
+        # gestor de ventanas sin los efectos secundarios de hide/show.
+        self.layout().activate()
         self.adjustSize()
         self._center_window()
+        self.activateWindow()
 
     def _center_window(self):
         """Centra la ventana respecto al widget padre o la pantalla."""
