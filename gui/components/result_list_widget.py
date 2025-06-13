@@ -4,6 +4,9 @@ from PySide6.QtGui import QIcon # For icons on buttons
 import os
 from typing import List, Dict, Any
 
+from .search_result_item_widget import SearchResultItemWidget
+from gui.components.image_manager import ImageManager
+
 MAX_CHARS_SIDEBAR_TITLE = 25 # Increased max characters
 
 # --- Icon Paths for Navigation Buttons (assuming they are in app/imagenes) ---
@@ -75,9 +78,10 @@ class ResultListWidget(QWidget):
     item_selected = Signal(dict) # Emits the full book data of the selected item
     # item_hovered = Signal(dict) # Optional: for hover effects if needed
 
-    def __init__(self, books: List[Dict[str, Any]] = None, parent: QWidget = None):
+    def __init__(self, image_manager: ImageManager, books: List[Dict[str, Any]] = None, parent: QWidget = None):
         super().__init__(parent)
         self.books_data = [] 
+        self.image_manager = image_manager
 
         self.main_v_layout = QVBoxLayout(self) # Main layout for list + buttons
         self.main_v_layout.setContentsMargins(0,0,0,0)
@@ -95,23 +99,14 @@ class ResultListWidget(QWidget):
                 outline: 0; /* Remove focus outline */
             }
             QListWidget::item {
-                background-color: rgba(240, 240, 245, 0.75); /* Individual item card background */
-                border: 1px solid rgba(220, 220, 225, 0.5); /* Subtle border for item card */
-                border-radius: 5px;
-                padding: 10px 8px; /* Padding within each item card */
-                margin-bottom: 4px; /* Spacing between item cards */
-                color: #2C2C2C; 
+                background-color: transparent;
+                border: none;
+                padding: 0px;
+                margin-bottom: 5px;
             }
             QListWidget::item:selected {
-                background-color: rgba(255, 255, 255, 0.9); /* Brighter selected item card */
-                color: #111111; 
-                font-weight: bold;
-                border: 1px solid rgba(200, 200, 230, 0.85); /* Accent border for selected */
-                 /* Keep padding and margin same as normal item, or adjust as needed */
-            }
-            QListWidget::item:hover:!selected {
-                background-color: rgba(245, 245, 250, 0.85); /* Slightly lighter hover for item card */
-                border: 1px solid rgba(210, 210, 220, 0.7);
+                background-color: rgba(0, 0, 0, 0.05); /* Highlight behind the widget */
+                border-radius: 6px;
             }
         """)
         self.main_v_layout.addWidget(self.list_widget, 1) # List takes most space
@@ -207,9 +202,15 @@ class ResultListWidget(QWidget):
             return
 
         for book in self.books_data:
-            display_text = truncate_title_sidebar(book.get("Título", "Unknown Title"))
-            list_item = QListWidgetItem(display_text)
+            list_item = QListWidgetItem(self.list_widget)
+            item_widget = SearchResultItemWidget(book, self.image_manager)
+            
+            list_item.setSizeHint(item_widget.sizeHint())
             self.list_widget.addItem(list_item)
+            self.list_widget.setItemWidget(list_item, item_widget)
+            
+            # Store the original data in the item
+            list_item.setData(Qt.ItemDataRole.UserRole, book)
         
         if self.list_widget.count() > 0:
             # Check if the first item is selectable before trying to select it
@@ -255,8 +256,7 @@ class ResultListWidget(QWidget):
         self._update_nav_buttons_state()
 
     def get_current_selected_book_data(self) -> Dict[str, Any] | None:
-        current_row = self.list_widget.currentRow()
-        if 0 <= current_row < len(self.books_data):
-            if self.list_widget.item(current_row).flags() & Qt.ItemFlag.ItemIsSelectable:
-                return self.books_data[current_row]
+        current_item = self.list_widget.currentItem()
+        if current_item:
+            return current_item.data(Qt.ItemDataRole.UserRole)
         return None 

@@ -21,3 +21,6 @@ Thumbs.db # Windows
 # Archivos de logs y temporales varios
 *.log
 *.swp
+
+# Archivos de cache de la aplicación
+data/cache/

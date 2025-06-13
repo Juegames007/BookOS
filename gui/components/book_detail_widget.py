@@ -1,295 +1,139 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFrame, QScrollArea, QSizePolicy, QHBoxLayout
-from PySide6.QtGui import QFont, QDesktopServices, QIcon
-from PySide6.QtCore import Qt, QUrl, Signal, QSize
-from typing import Dict, Any
-import os
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QFrame, QScrollArea, QHBoxLayout
+from PySide6.QtGui import QFont, QPixmap
+from PySide6.QtCore import Qt, Signal
 
-# Attempt to get styles, provide defaults if not found
-try:
-    from gui.common.styles import FONTS, COLORS, STYLES
-except ImportError:
-    print("Warning: gui.common.styles not found. Using default styles for BookDetailWidget.")
-    FONTS = {"family": "Arial", "size_large": 14, "size_medium": 12, "size_normal": 11, "size_small": 10, "size_uniform": 12}
-    COLORS = {"text_primary": "#222222", "text_secondary": "#555555", "accent_blue": "#007AFF", "text_label": "#666666"}
-    STYLES = {"button_primary": ""}
-
-# Icon path for the image button
-try:
-    CURRENT_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-    # Navigate two levels up (components -> gui -> project_root) then to app/imagenes/
-    VER_ICON_PATH = os.path.join(os.path.dirname(os.path.dirname(CURRENT_SCRIPT_DIR)), "app", "imagenes", "ver.png")
-    NO_VER_ICON_PATH = os.path.join(os.path.dirname(os.path.dirname(CURRENT_SCRIPT_DIR)), "app", "imagenes", "no_ver.png") # Define path for no_ver.png
-except NameError: # Fallback if __file__ is not defined
-    VER_ICON_PATH = os.path.join("app", "imagenes", "ver.png")
-    NO_VER_ICON_PATH = os.path.join("app", "imagenes", "no_ver.png")
-
+from gui.common.styles import FONTS, COLORS
+from gui.components.image_manager import ImageManager
 
 class BookDetailWidget(QFrame):
-    image_view_requested = Signal(str) # Signal to request opening an image URL
+    image_view_requested = Signal(str)
 
-    def __init__(self, parent: QWidget = None):
+    def __init__(self, image_manager: ImageManager, parent: QWidget = None):
         super().__init__(parent)
         self.setObjectName("bookDetailFrame")
-        # Make the QFrame itself transparent, as its parent (unified_content_card) will provide the visual background.
         self.setStyleSheet("QFrame#bookDetailFrame { background-color: transparent; border: none; }")
-        self.font_family = FONTS.get("family", "Arial")
+        
+        self.image_manager = image_manager
+        self.image_manager.image_loaded.connect(self._on_image_loaded)
+        self._current_book_isbn = None
 
-        # Main layout for this widget, allows content to scroll if it overflows
+        # Main layout
+        frame_main_layout = QHBoxLayout(self)
+        frame_main_layout.setContentsMargins(10, 10, 10, 10)
+        frame_main_layout.setSpacing(15)
+
+        # Left side: Image
+        self.image_label = QLabel()
+        self.image_label.setFixedSize(180, 220)
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setStyleSheet(f"""
+            QLabel {{
+                background-color: rgba(0, 0, 0, 0.05);
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                border-radius: 8px;
+                color: {COLORS['text_secondary']};
+                font-family: {FONTS['family']};
+                font-size: {FONTS['size_normal']}px;
+            }}
+        """)
+        
+        # Right side: Details in a scroll area
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setStyleSheet("QScrollArea { background: transparent; border: none; }")
         
-        self.content_widget = QWidget() # Widget that will contain all the labels and button
+        self.content_widget = QWidget()
         self.content_widget.setStyleSheet("QWidget { background: transparent; }")
         self.scroll_area.setWidget(self.content_widget)
 
-        self.details_layout = QVBoxLayout(self.content_widget) # Layout for labels and button
-        self.details_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.details_layout.setSpacing(8) # Reduced spacing for label pairs
-        self.details_layout.setContentsMargins(10, 8, 10, 8) # Reduced margins
-
-        text_color_primary = COLORS.get('text_primary', '#222222')
-        text_color_secondary = COLORS.get('text_secondary', '#444444')
-        label_text_color = COLORS.get('text_label', '#666666')
-        label_font_size = FONTS.get("size_small", 10) 
-        # Uniform font size for all data values, title can be slightly larger or bolder.
-        value_font_size_uniform = FONTS.get("size_uniform", 11) 
-        title_value_font_size = FONTS.get("size_normal", 11) # Reduced title font size, was size_medium (12)
-
-        # --- Title --- 
-        self.title_static_label = QLabel("Título:")
-        self.title_static_label.setFont(QFont(self.font_family, label_font_size, QFont.Weight.Normal))
-        self.title_static_label.setStyleSheet(f"color: {label_text_color}; background-color: transparent; margin-bottom: -3px;")
-        self.details_layout.addWidget(self.title_static_label)
-
-        self.title_label = QLabel("Título del Libro")
-        # Title remains bold, but uses specific size
-        title_font = QFont(self.font_family, title_value_font_size, QFont.Weight.Bold)
-        self.title_label.setFont(title_font)
-        self.title_label.setStyleSheet(f"color: {text_color_primary}; background-color: transparent;")
-        self.title_label.setWordWrap(True)
+        self.details_layout = QVBoxLayout(self.content_widget)
+        self.details_layout.setAlignment(Qt.AlignTop)
+        self.details_layout.setSpacing(10)
+        
+        # --- Title ---
+        self.title_label = self._create_label(FONTS['size_large'], QFont.Weight.Bold, COLORS['text_primary'])
         self.details_layout.addWidget(self.title_label)
-        self.details_layout.addSpacing(4) # Reduced spacing
 
-        # --- Author --- 
-        self.author_static_label = QLabel("Autor:")
-        self.author_static_label.setFont(QFont(self.font_family, label_font_size, QFont.Weight.Normal))
-        self.author_static_label.setStyleSheet(f"color: {label_text_color}; background-color: transparent; margin-bottom: -3px;")
-        self.details_layout.addWidget(self.author_static_label)
-
-        self.author_label = QLabel("Autor")
-        author_font = QFont(self.font_family, value_font_size_uniform) 
-        self.author_label.setFont(author_font)
-        self.author_label.setStyleSheet(f"color: {text_color_secondary}; background-color: transparent;")
-        self.author_label.setWordWrap(True)
+        # --- Author ---
+        self.author_label = self._create_label(FONTS['size_medium'], QFont.Weight.Normal, COLORS['text_secondary'], "Autor: ")
         self.details_layout.addWidget(self.author_label)
-        self.details_layout.addSpacing(6)
 
-        # --- Category --- 
-        self.category_static_label = QLabel("Categoría:")
-        self.category_static_label.setFont(QFont(self.font_family, label_font_size, QFont.Weight.Normal))
-        self.category_static_label.setStyleSheet(f"color: {label_text_color}; background-color: transparent; margin-bottom: -3px;")
-        self.details_layout.addWidget(self.category_static_label)
-
-        self.category_label = QLabel("Categoría")
-        category_font = QFont(self.font_family, value_font_size_uniform) 
-        self.category_label.setFont(category_font)
-        self.category_label.setStyleSheet(f"color: {text_color_secondary}; background-color: transparent;")
-        self.category_label.setWordWrap(True)
+        # --- Category ---
+        self.category_label = self._create_label(FONTS['size_normal'], QFont.Weight.Normal, COLORS['text_secondary'], "Categoría: ")
         self.details_layout.addWidget(self.category_label)
-        self.details_layout.addSpacing(6)
+        
+        # --- Quantity ---
+        self.quantity_label = self._create_label(FONTS['size_normal'], QFont.Weight.Normal, COLORS['text_secondary'], "Cantidad: ")
+        self.details_layout.addWidget(self.quantity_label)
 
         # --- Price ---
-        self.price_static_label = QLabel("Precio:")
-        self.price_static_label.setFont(QFont(self.font_family, label_font_size, QFont.Weight.Normal))
-        self.price_static_label.setStyleSheet(f"color: {label_text_color}; background-color: transparent; margin-bottom: -3px;")
-        self.details_layout.addWidget(self.price_static_label)
-
-        self.price_label = QLabel("$0.00")
-        price_font = QFont(self.font_family, value_font_size_uniform)
-        self.price_label.setFont(price_font)
-        self.price_label.setStyleSheet(f"color: {text_color_secondary}; background-color: transparent;")
+        self.price_label = self._create_label(FONTS['size_medium'], QFont.Weight.Bold, COLORS['accent_green'], "Precio: ")
         self.details_layout.addWidget(self.price_label)
-        self.details_layout.addSpacing(6)
 
-        # --- Position --- 
-        self.position_static_label = QLabel("Posición:")
-        self.position_static_label.setFont(QFont(self.font_family, label_font_size, QFont.Weight.Normal))
-        self.position_static_label.setStyleSheet(f"color: {label_text_color}; background-color: transparent; margin-bottom: -3px;")
-        self.details_layout.addWidget(self.position_static_label)
-
-        self.position_label = QLabel("Posición")
-        position_font = QFont(self.font_family, value_font_size_uniform) 
-        self.position_label.setFont(position_font)
-        self.position_label.setStyleSheet(f"color: {text_color_secondary}; background-color: transparent;")
-        self.position_label.setWordWrap(True)
+        # --- Position ---
+        self.position_label = self._create_label(FONTS['size_normal'], QFont.Weight.Normal, COLORS['text_secondary'], "Posición: ")
         self.details_layout.addWidget(self.position_label)
-        self.details_layout.addSpacing(10) # Add some spacing before the button
 
-        # --- Image Button --- 
-        self.view_image_button = QPushButton(" View Image") # Keep space for icon
-        
-        # Consistent styling with other modern buttons
-        button_font_size = FONTS.get("size_normal", 11)
-        button_text_color = COLORS.get("text_primary", "#222222")
-        button_bg_color = "rgba(200, 200, 200, 0.5)" # Light gray, semi-transparent
-        button_hover_bg_color = "rgba(200, 200, 200, 0.7)"
-        button_pressed_bg_color = "rgba(180, 180, 180, 0.6)"
+        frame_main_layout.addWidget(self.scroll_area, 1)
+        frame_main_layout.addWidget(self.image_label)
+        self.update_details({})
 
-        image_button_style = (f"""
-            QPushButton {{
-                background-color: {button_bg_color};
-                border: 1px solid rgba(0, 0, 0, 0.1);
-                color: {button_text_color};
-                padding: 5px 10px;
-                border-radius: 5px;
-                font-size: {button_font_size}pt; 
-            }}
-            QPushButton:hover {{ background-color: {button_hover_bg_color}; }}
-            QPushButton:pressed {{ background-color: {button_pressed_bg_color}; }}
-            QPushButton:disabled {{ 
-                background-color: rgba(200, 200, 200, 0.3);
-                color: rgba(0,0,0,0.4);
-            }}
-        """)
+    def _create_label(self, font_size, font_weight, color, prefix=""):
+        label = QLabel(prefix)
+        label.setFont(QFont(FONTS['family'], font_size, font_weight))
+        label.setStyleSheet(f"color: {color}; background-color: transparent;")
+        label.setWordWrap(True)
+        label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        return label
 
-        self.view_image_button.setStyleSheet(image_button_style)
-        self.view_image_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.view_image_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.view_image_button.setMinimumHeight(32) 
-        self.view_image_button.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
-        self.view_image_button.clicked.connect(self._on_view_image_clicked)
+    def update_details(self, book_data: dict):
+        self._current_book_isbn = book_data.get("ISBN")
 
-        self.details_layout.addWidget(self.view_image_button, 0, Qt.AlignmentFlag.AlignLeft)
-        
-        # Set up the main layout for the QFrame itself, containing the scroll area
-        frame_main_layout = QVBoxLayout(self)
-        frame_main_layout.addWidget(self.scroll_area)
-        frame_main_layout.setContentsMargins(0,0,0,0)
-
-        # Store current book data
-        self._current_book_data = None
-        self.update_details({}) # Initialize with empty details
-
-    def update_details(self, book_data: Dict[str, Any]):
-        self._current_book_data = book_data
-        is_book_selected = bool(book_data)
-
-        self.title_static_label.setVisible(is_book_selected)
-        self.author_static_label.setVisible(is_book_selected)
-        self.category_static_label.setVisible(is_book_selected)
-        self.position_static_label.setVisible(is_book_selected)
-        self.price_static_label.setVisible(is_book_selected) # Show/hide price label
-
-        if not is_book_selected:
-            self.title_label.setText("Seleccione un libro") # Keep this centered or styled for prompt
-            self.author_label.setText("")
-            self.category_label.setText("")
-            self.price_label.setText("") # Clear price label
-            self.position_label.setText("")
-            self.view_image_button.setVisible(False)
+        if not book_data:
+            self.title_label.setText("Seleccione un libro")
+            self.author_label.setVisible(False)
+            self.category_label.setVisible(False)
+            self.quantity_label.setVisible(False)
+            self.price_label.setVisible(False)
+            self.position_label.setVisible(False)
+            self.image_label.setText("SELECCIONE UN LIBRO")
+            self.image_label.setPixmap(QPixmap())
             return
 
+        self.author_label.setVisible(True)
+        self.category_label.setVisible(True)
+        self.quantity_label.setVisible(True)
+        self.price_label.setVisible(True)
+        self.position_label.setVisible(True)
+
         self.title_label.setText(book_data.get("Título", "N/A"))
-        self.author_label.setText(book_data.get('Autor', 'N/A')) # Removed "Autor: " prefix
-        categories = book_data.get("Categorías", [])
-        if isinstance(categories, list):
-            self.category_label.setText(', '.join(categories) if categories else 'N/A') # Removed "Categoría: " prefix
-        else: self.category_label.setText(categories if categories else 'N/A')
+        self.author_label.setText(f"Autor: {book_data.get('Autor', 'N/A')}")
         
-        # Display Price with formatting
-        price_value = book_data.get('Precio')
-        if price_value is not None:
-            try:
-                # Format as integer with thousands separator for Colombian pesos
-                price_text = f"$ {int(price_value):,}".replace(",", ".")
-            except (ValueError, TypeError): 
-                price_text = str(price_value) 
+        categories = book_data.get("Categorías", [])
+        cat_text = ', '.join(categories) if isinstance(categories, list) else (categories or 'N/A')
+        self.category_label.setText(f"Categoría: {cat_text}")
+
+        self.quantity_label.setText(f"Cantidad: {book_data.get('Cantidad', 'N/A')}")
+
+        price = book_data.get('Precio', 'N/A')
+        price_text = f"$ {int(price):,}".replace(",", ".") if isinstance(price, (int, float)) else str(price)
+        self.price_label.setText(f"Precio: {price_text}")
+        
+        self.position_label.setText(f"Posición: {book_data.get('Posición', 'N/A')}")
+
+        image_url = book_data.get("Imagen")
+        if image_url and self._current_book_isbn:
+            self.image_label.setText("CARGANDO...")
+            self.image_manager.get_image(self._current_book_isbn, image_url)
         else:
-            price_text = "N/A"
-        self.price_label.setText(price_text)
+            self.image_label.setText("NO IMAGEN DISPONIBLE")
+            self.image_label.setPixmap(QPixmap())
 
-        self.position_label.setText(book_data.get('Posición', 'N/A'))
-        image_url = book_data.get("Imagen", "")
-        has_image_url = bool(image_url)
-
-        self.view_image_button.setEnabled(has_image_url) # Habilitar/deshabilitar según si hay URL
-
-        if has_image_url:
-            self.view_image_button.setText(" Ver Imagen")
-            if os.path.exists(VER_ICON_PATH):
-                self.view_image_button.setIcon(QIcon(VER_ICON_PATH))
-                self.view_image_button.setToolTip("Ver imagen en el navegador")
-            else:
-                self.view_image_button.setIcon(QIcon())
-                self.view_image_button.setToolTip("Icono no encontrado")
-        else:
-            self.view_image_button.setText(" No disponible")
-            if os.path.exists(NO_VER_ICON_PATH):
-                self.view_image_button.setIcon(QIcon(NO_VER_ICON_PATH))
-                self.view_image_button.setToolTip("No hay imagen disponible para este libro")
-            else:
-                self.view_image_button.setIcon(QIcon())
-                self.view_image_button.setToolTip("Icono no encontrado")
-
-        self.view_image_button.setIconSize(QSize(16,16))
-
-    def _on_view_image_clicked(self):
-        if self._current_book_data:
-            image_url = self._current_book_data.get("Imagen")
-            if image_url:
-                self.image_view_requested.emit(image_url)
-
-# Example Usage (for testing this component standalone)
-if __name__ == '__main__':
-    from PySide6.QtWidgets import QApplication, QMainWindow
-    import sys
-
-    app = QApplication(sys.argv)
-
-    # Mock data for testing
-    sample_book = {
-        "Título": "El Gran Libro de los Sueños Cósmicos",
-        "Autor": "Dr. Fantástico Programador",
-        "Categorías": ["Ciencia Ficción", "Aventura"],
-        "Posición": "A1-01-Alpha",
-        "Precio": "29.99", # Added Price
-        "Imagen": "https://www.ejemplo.com/imagen_libro.jpg" # Replace with a real image URL for testing button
-    }
-    no_image_book = {
-        "Título": "Manual de Instrucciones para Objetos Inanimados",
-        "Autor": "Profesor Anónimo",
-        "Categorías": ["No Ficción", "Guías Prácticas"],
-        "Posición": "Z9-99-Zeta",
-        "Precio": "15.50", # Added Price
-        "Imagen": "" 
-    }
-
-    main_window = QMainWindow()
-    main_window.setWindowTitle("Book Detail Widget Test")
-    main_window.resize(380, 500) # Adjusted height for new layout
-    
-    # Simulate common styles if not available (adjust as needed for your project)
-    if 'FONTS' not in globals():
-        FONTS = {"family": "Segoe UI", "size_large": 14, "size_medium": 12, "size_normal": 11, "size_small": 10, "size_uniform": 12}
-    if 'COLORS' not in globals():
-        COLORS = {"text_primary": "#222222", "text_secondary": "#444444", "accent_blue": "#0078D4", "text_label": "#666666"}
-    if 'STYLES' not in globals():
-        STYLES = {"button_primary": ""}
-
-    detail_widget = BookDetailWidget()
-    detail_widget.update_details(sample_book)
-    # detail_widget.update_details(no_image_book) # Test with no image
-    # detail_widget.update_details({}) # Test empty
-
-    def open_image_test(url):
-        print(f"MAIN WINDOW: Image view requested for {url}")
-        QDesktopServices.openUrl(QUrl(url))
-
-    detail_widget.image_view_requested.connect(open_image_test)
-
-    main_window.setCentralWidget(detail_widget)
-    main_window.setStyleSheet("QMainWindow { background-color: #777788; }") # Darker bg for contrast test
-    main_window.show()
-
-    sys.exit(app.exec()) 
+    def _on_image_loaded(self, image_id, pixmap):
+        if self._current_book_isbn == image_id:
+            self.image_label.setPixmap(pixmap.scaled(
+                self.image_label.size(), 
+                Qt.AspectRatioMode.KeepAspectRatio, 
+                Qt.TransformationMode.SmoothTransformation
+            ))
+            self.image_label.setText("")

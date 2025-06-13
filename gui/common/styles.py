@@ -52,12 +52,12 @@ FONTS = {
     "family": "Montserrat",
     "family_title": "Montserrat",
     "family_fallback": "Arial",
-    "size_small": 10,
-    "size_normal": 11,
-    "size_medium": 12,
-    "size_large": 16,
-    "size_xlarge": 30,
-    "size_large_title": 24
+    "size_small": 11,
+    "size_normal": 13,
+    "size_medium": 14,
+    "size_large": 18,
+    "size_xlarge": 32,
+    "size_large_title": 26
 }
 
 # --- Estilos comunes ---

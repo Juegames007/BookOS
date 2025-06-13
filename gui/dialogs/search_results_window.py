@@ -9,6 +9,7 @@ from PySide6.QtGui import QIcon, QPainter, QPixmap, QMouseEvent, QFont, QDesktop
 from gui.components.result_list_widget import ResultListWidget
 from gui.components.book_detail_widget import BookDetailWidget
 from gui.components.book_list_view_widget import BookListViewWidget
+from gui.components.image_manager import ImageManager
 from gui.common.styles import FONTS, COLORS
 
 # Attempt to get icon paths, provide defaults if not found
@@ -33,7 +34,7 @@ class SearchResultsWindow(QDialog):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         # Darker, more opaque base for better glass effect depth
-        self.setStyleSheet("QDialog { background-color: rgba(30, 30, 35, 0.99); border-radius: 12px; }") # Corrected and increased alpha
+        self.setStyleSheet("QDialog { background-color: rgba(20, 20, 25, 0.98); border-radius: 12px; }") # Aumentada opacidad
 
         self._drag_pos = QPoint()
         self.top_bar_height = 42 # Slightly increased top bar height
@@ -78,7 +79,7 @@ class SearchResultsWindow(QDialog):
 
         self.window_title_label = QLabel("Search results")
         # Darker text for better visibility on lighter top bar
-        title_font = QFont(FONTS.get("family", "Arial"), FONTS.get("size_large", 14), QFont.Weight.DemiBold) # Reduced font size
+        title_font = QFont(FONTS.get("family", "Arial"), FONTS.get("size_large", 18), QFont.Weight.DemiBold) # Aumentado tamaño de fuente
         self.window_title_label.setFont(title_font)
         self.window_title_label.setStyleSheet(f"color: {COLORS.get('text_primary', '#222222')}; background-color: transparent;")
         top_bar_layout.addWidget(self.window_title_label)
@@ -108,13 +109,13 @@ class SearchResultsWindow(QDialog):
         # Styles for the card and its embedded top bar
         self.unified_content_card.setStyleSheet(f"""
             QFrame#unifiedResultsCard {{
-                background-color: rgba(255, 255, 255, 0.22); /* Less transparent light card */
+                background-color: rgba(255, 255, 255, 0.88); /* Much less transparent light card */
                 border-radius: 10px; /* Slightly less rounded */
                 /* border: 1px solid rgba(255, 255, 255, 0.25); Optional subtle border */
             }}
             QFrame#topBarResults {{
-                background-color: rgba(255, 255, 255, 0.18); /* Light, slightly more transparent top bar */
-                border-bottom: 1px solid rgba(255, 255, 255, 0.2); /* Subtle light separator */
+                background-color: rgba(255, 255, 255, 0.92); /* Light, almost opaque top bar */
+                border-bottom: 1px solid rgba(0, 0, 0, 0.08); /* Darker separator */
                 border-top-left-radius: 10px; 
                 border-top-right-radius: 10px;
                 border-bottom-left-radius: 0px; 
@@ -138,10 +139,13 @@ class SearchResultsWindow(QDialog):
         detail_view_layout.setContentsMargins(8, 8, 8, 0)
         detail_view_layout.setSpacing(8)
 
-        self.result_list_widget = ResultListWidget()
+        # Crear el ImageManager
+        self.image_manager = ImageManager(parent=self)
+
+        self.result_list_widget = ResultListWidget(image_manager=self.image_manager)
         # Set a maximum width for the list widget to control its size
-        self.result_list_widget.setMaximumWidth(240) # Increased width
-        self.book_detail_widget = BookDetailWidget()
+        self.result_list_widget.setMaximumWidth(280) # Increased width
+        self.book_detail_widget = BookDetailWidget(image_manager=self.image_manager)
         self.book_detail_widget.setStyleSheet("QFrame#bookDetailFrame { background-color: transparent; border: none; }")
 
         detail_view_layout.addWidget(self.result_list_widget, 2) # Adjusted stretch factor (e.g. 2 out of 5 parts)
@@ -150,7 +154,7 @@ class SearchResultsWindow(QDialog):
         self.view_stack.addWidget(self.detail_view_widget)
 
         # --- View 2: Row/List View ---
-        self.book_list_view_widget = BookListViewWidget() 
+        self.book_list_view_widget = BookListViewWidget(image_manager=self.image_manager) 
         self.view_stack.addWidget(self.book_list_view_widget)
 
         card_main_layout.addWidget(self.view_stack, 1)
@@ -293,6 +297,12 @@ class SearchResultsWindow(QDialog):
         self.libros_actuales = libros_encontrados
         self.termino_busqueda_actual = termino_busqueda
         
+        count = len(libros_encontrados)
+        if count == 1:
+            self.window_title_label.setText(f"1 resultado para \"{termino_busqueda}\"")
+        else:
+            self.window_title_label.setText(f"{count} resultados para \"{termino_busqueda}\"")
+
         self.result_list_widget.update_results(libros_encontrados)
         if libros_encontrados:
             self.book_detail_widget.update_details(libros_encontrados[0])

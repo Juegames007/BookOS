@@ -1,41 +1,39 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem, QLabel
-from PySide6.QtCore import Qt, QSize, Signal, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QListWidget, QListWidgetItem
+from PySide6.QtCore import Qt, Signal
 from typing import List, Dict, Any
 
 from .book_list_item_widget import BookListItemWidget
+from .image_manager import ImageManager
 
 class BookListViewWidget(QWidget):
     # Signal to be emitted when an image view is requested from one of the items
     image_view_requested = Signal(str)
 
-    def __init__(self, parent: QWidget = None):
+    def __init__(self, image_manager: ImageManager, parent: QWidget = None):
         super().__init__(parent)
+        self.image_manager = image_manager
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
 
         self.list_widget = QListWidget()
-        self.list_widget.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.list_widget.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.list_widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.list_widget.setStyleSheet("""
             QListWidget {
                 background-color: transparent;
                 border: none;
-                padding: 5px;
-                outline: 0; /* Remove focus outline */
+                padding: 8px;
+                outline: 0;
             }
             QListWidget::item {
-                border: none; /* Remove default item border, custom widget handles it */
-                background-color: transparent; /* Item background is handled by BookListItemWidget or its style */
-                padding: 0px; /* No padding for the QListWidgetItem itself */
-                margin-bottom: 5px; /* Spacing between custom widgets */
+                border: none;
+                background-color: transparent;
+                padding: 0px;
+                margin-bottom: 8px;
             }
             QListWidget::item:selected {
-                background-color: rgba(200, 200, 230, 0.35); /* Subtle selection highlight for the item container */
-                border-radius: 4px;
+                background-color: transparent; /* Selection handled by widget hover/style */
             }
-            /* Hover effects can be managed by BookListItemWidget or here if desired */
-            /* QListWidget::item:hover:!selected { background-color: rgba(240,240,248,0.15); border-radius: 4px; } */
         """)
         self.main_layout.addWidget(self.list_widget)
 
@@ -45,13 +43,11 @@ class BookListViewWidget(QWidget):
             return
 
         for book in books_data:
-            list_item_widget = BookListItemWidget(book)
-            # Connect the item's signal to the handler in this widget
-            list_item_widget.image_view_requested.connect(self._handle_item_image_view_request)
+            list_item_widget = BookListItemWidget(book, self.image_manager)
+            list_item_widget.image_view_requested.connect(self.image_view_requested)
             
             q_list_item = QListWidgetItem(self.list_widget)
-            
-            q_list_item.setSizeHint(list_item_widget.sizeHint())
+            q_list_item.setSizeHint(list_item_widget.minimumSizeHint())
             
             self.list_widget.addItem(q_list_item)
             self.list_widget.setItemWidget(q_list_item, list_item_widget)
@@ -63,13 +59,6 @@ class BookListViewWidget(QWidget):
         if current_item:
             return current_item.data(Qt.ItemDataRole.UserRole)
         return None
-
-    def _handle_item_image_view_request(self, image_url: str):
-        # This method is called when a BookListItemWidget requests an image view.
-        # It now emits the BookListViewWidget's own signal.
-        if image_url:
-            print(f"BookListViewWidget: Relaying image view request for URL: {image_url}")
-            self.image_view_requested.emit(image_url)
 
 if __name__ == '__main__':
     from PySide6.QtWidgets import QApplication
