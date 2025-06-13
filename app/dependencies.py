@@ -14,6 +14,7 @@ try:
     from core.data_manager import DataManager
     from features.book_info import GetBookInfo
     from features.book_api import GoogleBooksApi
+    from features.delete_service import DeleteService
 except ImportError as e:
     # Si 'core' no está directamente en PYTHONPATH, intentar ajuste relativo
     # Esto es útil si 'dependencies.py' está en 'app/' y 'core' está al mismo nivel ('../core')
@@ -29,6 +30,7 @@ except ImportError as e:
     from core.data_manager import DataManager
     from features.book_info import GetBookInfo
     from features.book_api import GoogleBooksApi
+    from features.delete_service import DeleteService
 
 
 # Determinar rutas importantes
@@ -47,6 +49,7 @@ class DependencyFactory:
     _sql_manager_instance: Optional[SQLManager] = None
     _get_book_info_instance: Optional[GetBookInfo] = None
     _http_client_instance: Optional[HttpClientInterface] = None
+    _delete_service_instance: Optional[DeleteService] = None
 
     @classmethod
     def get_sql_manager(cls) -> SQLManager:
@@ -148,6 +151,14 @@ class DependencyFactory:
             cls._get_book_info_instance = GetBookInfo(apis=[google_books_api])
             print("Servicio de información de libros inicializado con Google Books API.")
         return cls._get_book_info_instance
+
+    @classmethod
+    def get_delete_service(cls) -> DeleteService:
+        if cls._delete_service_instance is None:
+            data_manager = cls.get_data_manager()
+            cls._delete_service_instance = DeleteService(data_manager)
+            print("DeleteService inicializado.")
+        return cls._delete_service_instance
 
 # Para probar este módulo directamente (opcional)
 if __name__ == '__main__':

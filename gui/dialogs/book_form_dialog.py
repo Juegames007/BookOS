@@ -282,11 +282,11 @@ class BookFormDialog(QDialog):
 
     def _configure_for_mode(self):
         if self.mode == 'ADD':
-            self.title_label_internal.setText("Agregar Libro")
-            self.guardar_button.setText("Guardar Libro")
+            self.title_label_internal.setText("Agregar")
+            self.guardar_button.setText("Guardar")
         elif self.mode == 'MODIFY':
-            self.title_label_internal.setText("Modificar Libro")
-            self.guardar_button.setText("Actualizar Libro")
+            self.title_label_internal.setText("Modificar")
+            self.guardar_button.setText("Actualizar")
 
     def buscar_isbn(self):
         isbn = self.isbn_input.text().strip()

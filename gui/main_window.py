@@ -32,7 +32,9 @@ from features.book_service import BookService
 from features.reservation_service import ReservationService
 from features.sell_service import SellService
 from features.return_service import ReturnService
+from features.delete_service import DeleteService
 from gui.dialogs.search_results_window import SearchResultsWindow
+from gui.dialogs.delete_book_dialog import DeleteBookDialog
 from core.sqlmanager import SQLManager
 
 class VentanaGestionLibreria(QMainWindow):
@@ -57,6 +59,7 @@ class VentanaGestionLibreria(QMainWindow):
         self.reservation_service = ReservationService(self.data_manager)
         self.sell_service = SellService(self.data_manager, self.book_service)
         self.return_service = ReturnService(self.data_manager)
+        self.delete_service = DeleteService(self.data_manager)
 
         target_width, target_height = 1366, 768
         try:
@@ -127,6 +130,10 @@ class VentanaGestionLibreria(QMainWindow):
             dialog = ModifyBookDialog(book_service=self.book_service, parent=self, blur_effect=self.blur_effect)
             dialog.exec()
         
+        elif accion_limpia == "Eliminar Libro":
+            dialog = DeleteBookDialog(delete_service=self.delete_service, parent=self, blur_effect=self.blur_effect)
+            dialog.exec()
+
         elif accion_limpia == "Vender Libro":
             self._open_sell_book_dialog()
 
