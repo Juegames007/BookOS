@@ -133,7 +133,7 @@ class VentanaGestionLibreria(QMainWindow):
         elif accion_limpia == "Eliminar Libro":
             dialog = DeleteBookDialog(delete_service=self.delete_service, parent=self, blur_effect=self.blur_effect)
             dialog.exec()
-
+        
         elif accion_limpia == "Vender Libro":
             self._open_sell_book_dialog()
 

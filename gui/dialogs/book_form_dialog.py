@@ -13,8 +13,9 @@ from PySide6.QtWidgets import (
     QLineEdit, QPushButton, QFrame, QWidget, QMessageBox, QSizePolicy,
     QSpacerItem, QGraphicsBlurEffect
 )
-from PySide6.QtGui import QFont, QPixmap, QPainter, QColor, QBrush, QMouseEvent
-from PySide6.QtCore import Qt, QPoint, Signal, QTimer, Property, QEasingCurve, QPropertyAnimation
+from PySide6.QtGui import QFont, QPixmap, QPainter, QColor, QBrush, QMouseEvent, QFontDatabase, QIcon
+from PySide6.QtCore import Qt, QPoint, Signal, QTimer, Property, QEasingCurve, QPropertyAnimation, QUrl, QSize
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 from typing import Dict, Any, Optional
 
 from gui.common.styles import COLORS, FONTS, STYLES
@@ -29,8 +30,8 @@ class CustomToggleSwitch(QWidget):
         super().__init__(parent)
         self.setCheckable(True)
         self._checked = False
-        self.setFixedHeight(22)
-        self.setFixedWidth(40)
+        self.setFixedHeight(26)
+        self.setFixedWidth(48)
         self._discapacidad_color_on = discapacidad_color_on
         self._discapacidad_color_off = discapacidad_color_off
         self._circulo_color = circulo_color
@@ -83,7 +84,15 @@ class BookFormDialog(QDialog):
         self.setWindowTitle(" ")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.font_family = FONTS["family"]
+
+        font_dir = os.path.join(os.path.dirname(__file__), '..', 'resources', 'fonts')
+        for font_file in ["Montserrat-Regular.ttf", "Montserrat-Bold.ttf", "Montserrat-SemiBold.ttf"]:
+            QFontDatabase.addApplicationFont(os.path.join(font_dir, font_file))
+        self.font_family = "Montserrat"
+
+        self.network_manager = QNetworkAccessManager(self)
+        self.network_manager.finished.connect(self._on_image_loaded)
+
         self._drag_pos = QPoint()
         self.title_bar_height = 50
         self.ultimo_isbn_procesado_con_enter = None
@@ -102,9 +111,6 @@ class BookFormDialog(QDialog):
         self._initial_load()
 
     def _setup_ui(self):
-        # self.animation = QPropertyAnimation(self, b"maximumHeight")
-        # self.animation.setDuration(300)
-        # self.animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
         main_dialog_layout = QVBoxLayout(self)
         main_dialog_layout.setContentsMargins(0, 0, 0, 0)
         main_dialog_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -116,38 +122,41 @@ class BookFormDialog(QDialog):
 
         self.unified_form_frame.setStyleSheet(f"""
             QFrame#unifiedFormFrame {{
-                background-color: {COLORS.get('background_light', 'rgba(255, 255, 255, 0.8)')} !important;
+                background-color: rgba(255, 255, 255, 0.8) !important;
                 border-radius: 16px !important;
                 border: 0.5px solid white !important;
-                padding: 20px;
+                padding: 24px;
+                font-family: "{self.font_family}";
             }}
             QLabel#dialogTitleLabel {{
                 color: {label_text_color} !important;
                 background: transparent !important;
-                font-size: {FONTS.get('size_xlarge', 20)}px;
+                font-family: "{self.font_family}";
+                font-size: 35px;
                 font-weight: bold;
-                padding-bottom: 0px;
+                padding-bottom: 5px;
             }}
             QLabel.fieldLabel {{
                 color: {label_text_color} !important;
                 background: transparent !important;
-                font-size: {FONTS.get('size_normal', 11)}px;
-                padding-bottom: 3px;
+                font-size: 14px;
+                padding-bottom: 5px;
                 font-weight: bold;
             }}
             QLabel#toggleLabel {{
                 color: {sub_label_text_color} !important;
                 background: transparent !important;
-                font-size: {FONTS.get('size_small', 10)}px;
+                font-size: 12px;
             }}
             QLineEdit {{
                 background-color: rgba(255, 255, 255, 0.9);
                 border: 1px solid {COLORS.get('border_medium', 'rgba(190, 190, 190, 150)')};
-                font-size: {FONTS.get('size_normal', 11)}px;
-                min-height: 36px;
-                border-radius: 6px;
-                padding-left: 8px; padding-right: 8px;
+                font-size: 14px;
+                min-height: 40px;
+                border-radius: 8px;
+                padding-left: 10px; padding-right: 10px;
                 color: {COLORS.get('text_primary', "#1F2224")};
+                font-family: "{self.font_family}";
             }}
             QLineEdit::placeholder {{
                 color: {COLORS.get('text_placeholder', '#A0A0A0')};
@@ -159,8 +168,15 @@ class BookFormDialog(QDialog):
             QLineEdit:focus {{
                 border: 1.5px solid {COLORS.get('border_focus', '#0078D7')};
             }}
+            QLabel#imageContainerLabel {{
+                background-color: {COLORS.get('gray_light', '#F0F0F0')};
+                border-radius: 12px;
+                border: 1px solid {COLORS.get('border_light', '#E0E0E0')};
+            }}
         """)
-        self.unified_form_frame.setFixedWidth(440)
+        
+        self.unified_form_frame.setMinimumWidth(400)
+
         self.frame_layout = QVBoxLayout(self.unified_form_frame)
         self.frame_layout.setSpacing(10)
         self.frame_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -170,7 +186,7 @@ class BookFormDialog(QDialog):
         self.title_label_internal.setObjectName("dialogTitleLabel")
         title_toggle_row_layout.addWidget(self.title_label_internal)
         title_toggle_row_layout.addStretch(1)
-        self.cerrar_label_toggle = QLabel("Cerrar al guardar:")
+        self.cerrar_label_toggle = QLabel("Cerrar:")
         self.cerrar_label_toggle.setObjectName("toggleLabel")
         title_toggle_row_layout.addWidget(self.cerrar_label_toggle)
         self.cerrar_al_terminar_toggle = CustomToggleSwitch(
@@ -182,14 +198,55 @@ class BookFormDialog(QDialog):
         self.frame_layout.addLayout(title_toggle_row_layout)
         self.frame_layout.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed))
 
+        main_content_layout = QHBoxLayout()
+        main_content_layout.setSpacing(20)
+        self.frame_layout.addLayout(main_content_layout)
+
+        left_panel = QWidget()
+        left_panel_layout = QVBoxLayout(left_panel)
+        left_panel_layout.setContentsMargins(0, 0, 0, 0)
+        left_panel_layout.setSpacing(8)
+        main_content_layout.addWidget(left_panel, 2) 
+
+        self.right_panel_container = QWidget()
+        right_panel_layout = QVBoxLayout(self.right_panel_container)
+        right_panel_layout.setContentsMargins(0, 0, 0, 0)
+        self.image_container_label = QLabel()
+        self.image_container_label.setObjectName("imageContainerLabel")
+        self.image_container_label.setFixedSize(220, 310)
+        self.image_container_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        right_panel_layout.addWidget(self.image_container_label)
+        main_content_layout.addWidget(self.right_panel_container, 1)
+        self.right_panel_container.setVisible(False)
+
         isbn_label = QLabel("ISBN:"); isbn_label.setObjectName("fieldLabel")
         palette_isbn = isbn_label.palette()
         palette_isbn.setColor(isbn_label.foregroundRole(), QColor(COLORS.get('text_primary', '#202427')))
         isbn_label.setPalette(palette_isbn)
         self.isbn_input = QLineEdit(); self.isbn_input.setPlaceholderText("Ingresar ISBN y presionar Enter")
         self.isbn_input.returnPressed.connect(self.buscar_isbn)
-        self.frame_layout.addWidget(isbn_label)
-        self.frame_layout.addWidget(self.isbn_input)
+        left_panel_layout.addWidget(isbn_label)
+
+        isbn_layout = QHBoxLayout()
+        isbn_layout.setSpacing(5)
+        isbn_layout.addWidget(self.isbn_input)
+
+        self.search_isbn_button = QPushButton()
+        self.search_isbn_button.setFixedSize(40, 40)
+        self.search_isbn_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.search_isbn_button.setStyleSheet("background-color: transparent; border: none;")
+        
+        project_base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+        icon_path = os.path.join(project_base_path, 'app', 'imagenes', 'enter.png')
+        search_icon = QIcon(icon_path)
+        
+        self.search_isbn_button.setIcon(search_icon)
+        self.search_isbn_button.setIconSize(QSize(24, 24))
+        self.search_isbn_button.clicked.connect(self.buscar_isbn)
+        self.search_isbn_button.setAutoDefault(False)
+        isbn_layout.addWidget(self.search_isbn_button)
+
+        left_panel_layout.addLayout(isbn_layout)
         
         self.detail_widgets_container = QWidget()
         details_layout = QVBoxLayout(self.detail_widgets_container)
@@ -222,7 +279,7 @@ class BookFormDialog(QDialog):
         details_layout.addWidget(image_url_w)
         image_url_w.setVisible(False)
 
-        self.frame_layout.addWidget(self.detail_widgets_container)
+        left_panel_layout.addWidget(self.detail_widgets_container)
         self.detail_widgets_container.setVisible(False)
         
         self.action_buttons_container = QWidget()
@@ -230,13 +287,15 @@ class BookFormDialog(QDialog):
         button_layout.setContentsMargins(0, 15, 0, 0); button_layout.setSpacing(10)
         
         self.cancelar_button = QPushButton("Cancelar")
-        self.cancelar_button.setFixedHeight(38)
-        self.cancelar_button.setStyleSheet(STYLES.get("button_danger_full", "").replace("border-radius: 5px", "border-radius: 6px"))
+        self.cancelar_button.setFixedHeight(42)
+        cancelar_style = STYLES.get("button_danger_full", "").replace("border-radius: 5px", "border-radius: 8px")
+        cancelar_style += f"font-size: 14px; font-weight: bold; font-family: '{self.font_family}';"
+        self.cancelar_button.setStyleSheet(cancelar_style)
         self.cancelar_button.clicked.connect(self.reject)
         self.cancelar_button.setAutoDefault(False)
         
         self.guardar_button = QPushButton("Guardar")
-        self.guardar_button.setFixedHeight(38)
+        self.guardar_button.setFixedHeight(42)
         self.guardar_button.clicked.connect(self.guardar_libro)
         self.guardar_button.setAutoDefault(False)
 
@@ -245,7 +304,8 @@ class BookFormDialog(QDialog):
         button_layout.addWidget(self.guardar_button)
         button_layout.addStretch(1)
         
-        self.frame_layout.addWidget(self.action_buttons_container)
+        left_panel_layout.addSpacerItem(QSpacerItem(1, 1, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+        left_panel_layout.addWidget(self.action_buttons_container)
         self.action_buttons_container.setVisible(False)
 
         main_dialog_layout.addStretch(1)
@@ -388,6 +448,35 @@ class BookFormDialog(QDialog):
     def mouseReleaseEvent(self, event: QMouseEvent):
         self._drag_pos = QPoint(); event.accept()
 
+    def _set_placeholder_image(self):
+        placeholder_pixmap = QPixmap(self.image_container_label.size())
+        placeholder_pixmap.fill(QColor(COLORS.get('gray_light', '#F0F0F0')))
+        
+        painter = QPainter(placeholder_pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        font = QFont(self.font_family, 12)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor(COLORS.get('text_secondary', '#A0A0A0')))
+        painter.drawText(placeholder_pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "Portada no disponible")
+        painter.end()
+
+        self.image_container_label.setPixmap(placeholder_pixmap)
+
+    def _on_image_loaded(self, reply: QNetworkReply):
+        if reply.error() == QNetworkReply.NetworkError.NoError:
+            image_data = reply.readAll()
+            pixmap = QPixmap()
+            if pixmap.loadFromData(image_data):
+                scaled_pixmap = pixmap.scaled(self.image_container_label.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
+                self.image_container_label.setPixmap(scaled_pixmap)
+            else:
+                self._set_placeholder_image()
+        else:
+            self._set_placeholder_image()
+        reply.deleteLater()
+
     def _fill_form_fields(self, details, make_editable):
         self.titulo_input.setText(details.get("Título", "")); self.titulo_input.setReadOnly(not make_editable)
         self.autor_input.setText(details.get("Autor", "")); self.autor_input.setReadOnly(not make_editable)
@@ -396,15 +485,19 @@ class BookFormDialog(QDialog):
         precio = details.get("Precio", ""); self.precio_input.setText(str(precio)); self._formatear_texto_precio()
         self.precio_input.setReadOnly(not make_editable)
         self.posicion_input.setReadOnly(not make_editable)
-        self.imagen_input.setText(details.get("Imagen", "")); self.imagen_input.setReadOnly(not make_editable)
+        image_url = details.get("Imagen", "")
+        self.imagen_input.setText(image_url); self.imagen_input.setReadOnly(not make_editable)
         
+        if image_url:
+            request = QNetworkRequest(QUrl(image_url))
+            self.network_manager.get(request)
+        else:
+            self._set_placeholder_image()
+
         if not self.detail_widgets_container.isVisible():
             self.detail_widgets_container.setVisible(True)
-            # self.animation.setTargetObject(self.detail_widgets_container)
-            # self.animation.setStartValue(0)
-            # self.animation.setEndValue(self.detail_widgets_container.sizeHint().height())
-            # self.animation.start()
-        
+            self.right_panel_container.setVisible(True)
+            
         self.action_buttons_container.setVisible(True)
         self.guardar_button.setEnabled(make_editable)
         self._actualizar_estilo_guardar_button()
@@ -419,6 +512,7 @@ class BookFormDialog(QDialog):
         
         if self.detail_widgets_container.isVisible():
             self.detail_widgets_container.setVisible(False)
+            self.right_panel_container.setVisible(False)
         self.action_buttons_container.setVisible(False)
         self.guardar_button.setEnabled(False)
         self._actualizar_estilo_guardar_button()
@@ -438,6 +532,7 @@ class BookFormDialog(QDialog):
     def _actualizar_estilo_guardar_button(self):
         is_enabled = self.guardar_button.isEnabled()
         style_key = "button_primary_full" if is_enabled else "button_disabled"
-        style = STYLES.get(style_key, "").replace("border-radius: 5px", "border-radius: 6px")
+        style = STYLES.get(style_key, "").replace("border-radius: 5px", "border-radius: 8px")
+        style += f"font-size: 14px; font-weight: bold; font-family: '{self.font_family}';"
         self.guardar_button.setStyleSheet(style)
         self.guardar_button.setCursor(Qt.CursorShape.PointingHandCursor if is_enabled else Qt.CursorShape.ArrowCursor)
