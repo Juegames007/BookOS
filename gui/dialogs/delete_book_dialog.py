@@ -1,95 +1,88 @@
 """
-Diálogo para la gestión de eliminación de libros.
-
-Este módulo implementa la interfaz de usuario que permite a los usuarios
-buscar un libro por su ISBN y luego elegir entre disminuir su cantidad
-en inventario o eliminarlo permanentemente de la base de datos.
+Diálogo para la gestión de eliminación y reducción de existencias de libros.
 """
-
+import os
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QFrame,
-    QWidget, QMessageBox, QSpacerItem, QSizePolicy, QScrollArea, QListWidget, QListWidgetItem, QInputDialog
+    QWidget, QMessageBox, QInputDialog, QSpacerItem, QSizePolicy, QComboBox
 )
-from PySide6.QtGui import QFont, QPixmap, QIcon
+from PySide6.QtGui import QFont, QPixmap, QIcon, QFontDatabase
 from PySide6.QtCore import Qt, QSize, QTimer
 
 from features.delete_service import DeleteService
-from gui.common.styles import COLORS, FONTS, STYLES
 from gui.common.utils import get_icon_path, format_price
-from gui.common.widgets import CustomButton
+from gui.components.image_manager import ImageManager
 
 class DeleteBookDialog(QDialog):
     """
-    Diálogo para buscar y eliminar libros.
+    Diálogo rediseñado para buscar, visualizar y gestionar la eliminación de libros.
     """
     def __init__(self, delete_service: DeleteService, parent=None, blur_effect=None):
         super().__init__(parent)
         self.delete_service = delete_service
         self.current_book_data = None
-        self.current_inventory = []
+        self.inventory_entries = []
+
+        self.image_manager = ImageManager()
+        self.image_manager.image_loaded.connect(self._on_image_loaded)
 
         self._blur_effect = blur_effect
-        self.setWindowTitle("Eliminar / Reducir Existencias de Libro")
+        self.setWindowTitle("Eliminar Libro")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
-
+        
+        self._load_fonts()
         self._setup_ui()
         self._connect_signals()
         
-        QTimer.singleShot(0, self._initial_reposition)
+        QTimer.singleShot(0, self.adjustSize)
+        self.isbn_input.setFocus()
+
+    def _load_fonts(self):
+        font_dir = os.path.join(os.path.dirname(__file__), '..', 'resources', 'fonts')
+        for font_file in ["Montserrat-Regular.ttf", "Montserrat-Bold.ttf", "Montserrat-SemiBold.ttf"]:
+            font_path = os.path.join(font_dir, font_file)
+            if os.path.exists(font_path):
+                QFontDatabase.addApplicationFont(font_path)
 
     def _setup_ui(self):
-        # Frame principal con estilo glassmorphism
         self.main_frame = QFrame(self)
         self.main_frame.setObjectName("mainFrame")
-        self.main_frame.setStyleSheet(f"""
-            #mainFrame {{
-                background-color: rgba(255, 255, 255, 89);
-                border-radius: 16px;
-                border: 0.5px solid white;
-            }}
-        """)
         
-        # Layout principal del diálogo
         main_layout = QVBoxLayout(self)
         main_layout.addWidget(self.main_frame)
         main_layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(main_layout)
 
-        # Layout del contenido dentro del frame
-        content_layout = QVBoxLayout(self.main_frame)
-        content_layout.setContentsMargins(25, 20, 25, 25)
-        content_layout.setSpacing(20)
-        self.main_frame.setFixedWidth(500)
-
-        # --- Cabecera ---
-        header_layout = self._create_header()
-        content_layout.addLayout(header_layout)
-
-        # --- Búsqueda de ISBN ---
-        search_layout = self._create_search_layout()
-        content_layout.addLayout(search_layout)
+        self.content_layout = QVBoxLayout(self.main_frame)
+        self.content_layout.setContentsMargins(40, 30, 40, 30)
+        self.content_layout.setSpacing(25)
         
-        # --- Contenedor de Detalles (inicialmente oculto) ---
-        self.details_container = QWidget()
-        self.details_layout = QVBoxLayout(self.details_container)
-        self.details_layout.setContentsMargins(0, 10, 0, 0)
-        self.details_layout.setSpacing(15)
-        content_layout.addWidget(self.details_container)
-        self.details_container.setVisible(False)
+        self.content_layout.addLayout(self._create_header())
+        self.content_layout.addLayout(self._create_search_layout())
 
-        self._create_details_widgets()
+        self.details_container = QWidget()
+        self.details_container.setVisible(False)
+        self.content_layout.addWidget(self.details_container)
+        
+        details_main_layout = QHBoxLayout(self.details_container)
+        details_main_layout.setContentsMargins(0, 15, 0, 0)
+        details_main_layout.setSpacing(30)
+
+        details_main_layout.addLayout(self._create_left_panel(), 2)
+        details_main_layout.addLayout(self._create_right_panel(), 1)
+
+        self._apply_stylesheet()
 
     def _create_header(self):
         header_layout = QHBoxLayout()
         title_label = QLabel("Eliminar Libro")
-        title_label.setFont(QFont(FONTS["family_title"], FONTS["size_large_title"], QFont.Weight.Bold))
-        title_label.setStyleSheet(f"color: {COLORS['text_primary']}; background: transparent;")
-
+        title_label.setObjectName("dialogTitle")
+        
         close_btn = QPushButton("✕")
-        close_btn.setFixedSize(30, 30)
+        close_btn.setObjectName("closeButton")
+        close_btn.setFixedSize(35, 35)
         close_btn.setCursor(Qt.PointingHandCursor)
-        close_btn.setStyleSheet(STYLES.get('button_tertiary_full', ''))
         close_btn.setAutoDefault(False)
         close_btn.clicked.connect(self.reject)
         
@@ -100,198 +93,294 @@ class DeleteBookDialog(QDialog):
 
     def _create_search_layout(self):
         search_layout = QHBoxLayout()
+        search_layout.setSpacing(10)
         self.isbn_input = QLineEdit()
         self.isbn_input.setPlaceholderText("Ingresar ISBN del libro a buscar...")
-        self.isbn_input.setStyleSheet(STYLES['line_edit_style'])
-        self.isbn_input.setFixedHeight(45)
-        
-        self.search_button = QPushButton(QIcon(get_icon_path("buscar.png")), "")
-        self.search_button.setFixedSize(45, 45)
-        self.search_button.setIconSize(QSize(20, 20))
+        self.isbn_input.setFixedHeight(50)
+
+        self.search_button = QPushButton("Buscar")
+        self.search_button.setObjectName("searchButton")
+        self.search_button.setFixedHeight(50)
         self.search_button.setCursor(Qt.PointingHandCursor)
-        self.search_button.setStyleSheet(STYLES.get('button_primary_full', ''))
         self.search_button.setAutoDefault(False)
 
         search_layout.addWidget(self.isbn_input, 1)
         search_layout.addWidget(self.search_button)
         return search_layout
 
-    def _create_details_widgets(self):
-        # Widget para info básica del libro
-        self.book_info_widget = QLabel("Info del libro...")
-        self.book_info_widget.setWordWrap(True)
-        self.book_info_widget.setStyleSheet("background-color: rgba(0,0,0,0.05); border-radius: 8px; padding: 10px;")
+    def _create_left_panel(self):
+        layout = QVBoxLayout()
+        layout.setSpacing(12)
+
+        self.book_title_label = QLabel("Título del Libro")
+        self.book_title_label.setObjectName("bookTitle")
+        self.book_title_label.setWordWrap(True)
+
+        self.book_author_label = QLabel("Autor del Libro")
+        self.book_author_label.setObjectName("bookInfo")
+
+        self.book_price_label = QLabel("Precio: N/A")
+        self.book_price_label.setObjectName("bookInfo")
         
-        # Título para la sección de inventario
-        inventory_title = QLabel("Existencias en Inventario:")
-        inventory_title.setFont(QFont(FONTS["family"], 11, QFont.Weight.Bold))
-        inventory_title.setStyleSheet("background: transparent;")
-
-        # Lista para mostrar las posiciones y cantidades
-        self.inventory_list_widget = QListWidget()
-        self.inventory_list_widget.setStyleSheet("background-color: rgba(0,0,0,0.05); border-radius: 8px;")
-        self.inventory_list_widget.setFixedHeight(120)
-
-        # Botón para eliminar permanentemente
-        self.delete_permanently_button = QPushButton(QIcon(get_icon_path("eliminar.png")), " Eliminar Permanentemente")
-        self.delete_permanently_button.setStyleSheet(STYLES.get('button_danger_full', ''))
-        self.delete_permanently_button.setFixedHeight(40)
-        self.delete_permanently_button.setIconSize(QSize(18, 18))
+        layout.addWidget(self.book_title_label, 0, Qt.AlignTop)
+        layout.addWidget(self.book_author_label, 0, Qt.AlignTop)
+        layout.addWidget(self.book_price_label, 0, Qt.AlignTop)
+        
+        layout.addSpacerItem(QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Fixed))
+        
+        self.position_label = QLabel("Posición: N/A")
+        self.position_label.setObjectName("bookInfo")
+        
+        self.inventory_combo = QComboBox()
+        self.inventory_combo.setFixedHeight(40)
+        
+        self.book_quantity_label = QLabel("Cantidad: N/A")
+        self.book_quantity_label.setObjectName("bookInfo")
+        
+        layout.addWidget(self.position_label)
+        layout.addWidget(self.inventory_combo)
+        layout.addWidget(self.book_quantity_label)
+        
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
+        self.decrease_qty_button = QPushButton("Disminuir Cantidad")
+        self.decrease_qty_button.setObjectName("decreaseButton")
+        self.decrease_qty_button.setEnabled(False)
+        self.decrease_qty_button.setAutoDefault(False)
+        self.decrease_qty_button.setCursor(Qt.PointingHandCursor)
+        
+        self.delete_permanently_button = QPushButton("Eliminar Libro")
+        self.delete_permanently_button.setObjectName("deleteButton")
         self.delete_permanently_button.setAutoDefault(False)
+        self.delete_permanently_button.setEnabled(False)
+        self.delete_permanently_button.setCursor(Qt.PointingHandCursor)
 
-        self.details_layout.addWidget(self.book_info_widget)
-        self.details_layout.addWidget(inventory_title)
-        self.details_layout.addWidget(self.inventory_list_widget)
-        self.details_layout.addWidget(self.delete_permanently_button)
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(self.decrease_qty_button)
+        buttons_layout.addWidget(self.delete_permanently_button)
+        
+        layout.addStretch()
+        layout.addLayout(buttons_layout)
+        return layout
+        
+    def _create_right_panel(self):
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
+        self.image_label = QLabel()
+        self.image_label.setFixedSize(220, 330)
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setObjectName("imageLabel")
+        layout.addWidget(self.image_label)
+        return layout
+
+    def _apply_stylesheet(self):
+        self.main_frame.setStyleSheet("""
+            #mainFrame {
+                background-color: rgba(243, 244, 246, 0.95);
+                border-radius: 20px;
+                border: 1px solid rgba(0, 0, 0, 0.08);
+            }
+            #dialogTitle {
+                font-family: 'Montserrat'; font-size: 30px; font-weight: bold;
+                color: #1F2937; background: transparent;
+            }
+            #closeButton {
+                font-size: 18px; font-weight: bold; color: #6B7280;
+                background-color: #E5E7EB; border: none; border-radius: 17px;
+            }
+            #closeButton:hover { background-color: #D1D5DB; }
+            QLineEdit, QComboBox {
+                background-color: #FFFFFF; border: 1px solid #D1D5DB;
+                font-size: 15px; border-radius: 10px; padding: 0 15px; color: #1F2937;
+                font-family: 'Montserrat';
+            }
+            QComboBox::drop-down { border: none; }
+            #searchButton {
+                font-family: 'Montserrat'; font-size: 15px; font-weight: bold;
+                padding: 10px 22px; border-radius: 10px; border: none;
+                background-color: #1F2937; color: white;
+            }
+            #searchButton:hover { background-color: #111827; }
+            #bookTitle {
+                font-family: 'Montserrat'; font-size: 24px; font-weight: bold;
+                color: #1F2937; background: transparent;
+            }
+            #bookInfo {
+                font-family: 'Montserrat'; font-size: 17px;
+                color: #4B5563; background: transparent;
+            }
+            #imageLabel {
+                background-color: #E5E7EB; border-radius: 12px;
+                color: #9CA3AF; font-size: 16px; border: 1px solid #D1D5DB;
+            }
+            #decreaseButton, #deleteButton {
+                font-family: 'Montserrat'; font-size: 14px; font-weight: bold;
+                padding: 12px 20px; border-radius: 10px; border: none;
+            }
+            #decreaseButton { background-color: #4B5563; color: white; }
+            #decreaseButton:hover { background-color: #374151; }
+            #decreaseButton:disabled { background-color: #D1D5DB; color: #9CA3AF; }
+            #deleteButton { background-color: #EF4444; color: white; }
+            #deleteButton:hover { background-color: #DC2626; }
+            #deleteButton:disabled { background-color: #FCA5A5; color: #FEE2E2; }
+        """)
 
     def _connect_signals(self):
-        self.search_button.clicked.connect(self._find_book)
         self.isbn_input.returnPressed.connect(self._find_book)
-        self.inventory_list_widget.itemClicked.connect(self._on_inventory_item_clicked)
+        self.search_button.clicked.connect(self._find_book)
+        self.inventory_combo.currentIndexChanged.connect(self._update_quantity_label)
+        self.decrease_qty_button.clicked.connect(self._decrease_quantity)
         self.delete_permanently_button.clicked.connect(self._delete_book_permanently)
 
     def _find_book(self):
         isbn = self.isbn_input.text().strip()
-        if not isbn:
-            return
+        if not isbn: return
         
+        self._reset_view(is_new_search=False)
         result = self.delete_service.find_book_for_deletion(isbn)
         
         if result["status"] == "not_found":
             QMessageBox.warning(self, "No Encontrado", f"No se encontró ningún libro con el ISBN: {isbn}")
-            self._reset_view()
+            self.isbn_input.selectAll()
             return
         
         self.current_book_data = result["book_details"]
-        self.current_inventory = result["inventory_entries"]
+        self.inventory_entries = result["inventory_entries"]
+        self.image_manager.get_image(self.current_book_data.get('ISBN', ''), self.current_book_data.get('Imagen', ''))
         
         self._display_book_info()
-        self._display_inventory()
+        self._display_inventory_info()
+        self.delete_permanently_button.setEnabled(True)
         self.details_container.setVisible(True)
-        self.adjustSize()
+        QTimer.singleShot(0, self.adjustSize)
+
+    def _on_image_loaded(self, image_id, pixmap):
+        if self.current_book_data and image_id == self.current_book_data.get('ISBN'):
+            scaled_pixmap = pixmap.scaled(self.image_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.image_label.setPixmap(scaled_pixmap)
+        else:
+            self.image_label.setText("Imagen no disponible")
 
     def _display_book_info(self):
-        if not self.current_book_data:
+        if not self.current_book_data: return
+        self.book_title_label.setText(self.current_book_data.get('Título', 'N/A'))
+        self.book_author_label.setText(f"Por: {self.current_book_data.get('Autor', 'N/A')}")
+        self.book_price_label.setText(f"Precio: {format_price(self.current_book_data.get('Precio', 0))}")
+
+    def _display_inventory_info(self):
+        num_entries = len(self.inventory_entries)
+        
+        if num_entries == 0:
+            self.position_label.setText("Posición: N/A")
+            self.book_quantity_label.setText("Cantidad: 0")
+            self.position_label.show()
+            self.inventory_combo.hide()
+            self.decrease_qty_button.setEnabled(False)
+        elif num_entries == 1:
+            entry = self.inventory_entries[0]
+            self.position_label.setText(f"Posición: {entry['posicion']}")
+            self.book_quantity_label.setText(f"Cantidad: {entry['cantidad']}")
+            self.position_label.show()
+            self.inventory_combo.hide()
+            self.decrease_qty_button.setEnabled(True)
+        else: # More than 1 entry
+            self.inventory_combo.clear()
+            for entry in self.inventory_entries:
+                self.inventory_combo.addItem(f"{entry['posicion']}", userData=entry)
+            self.position_label.hide()
+            self.inventory_combo.show()
+            self._update_quantity_label(self.inventory_combo.currentIndex())
+
+    def _update_quantity_label(self, index):
+        if index < 0:
+            self.book_quantity_label.setText("Cantidad: -")
+            self.decrease_qty_button.setEnabled(False)
+            return
+
+        selected_data = self.inventory_combo.itemData(index)
+        if selected_data:
+            self.book_quantity_label.setText(f"Cantidad: {selected_data['cantidad']}")
+            self.decrease_qty_button.setEnabled(True)
+        else:
+            self.book_quantity_label.setText("Cantidad: 0")
+            self.decrease_qty_button.setEnabled(False)
+
+    def _decrease_quantity(self):
+        posicion = ""
+        if len(self.inventory_entries) == 1:
+            posicion = self.inventory_entries[0].get('posicion')
+        elif len(self.inventory_entries) > 1:
+            current_index = self.inventory_combo.currentIndex()
+            if current_index >= 0:
+                selected_data = self.inventory_combo.itemData(current_index)
+                posicion = selected_data.get('posicion')
+
+        if not posicion:
+            QMessageBox.warning(self, "Error", "No hay una posición de inventario válida para disminuir.")
             return
         
-        title = self.current_book_data.get('Título', 'N/A')
-        author = self.current_book_data.get('Autor', 'N/A')
-        price = self.current_book_data.get('Precio', 0)
-        
-        info_text = (
-            f"<b>Título:</b> {title}<br>"
-            f"<b>Autor:</b> {author}<br>"
-            f"<b>Precio de Venta Registrado:</b> {format_price(price)}"
-        )
-        self.book_info_widget.setText(info_text)
-
-    def _display_inventory(self):
-        self.inventory_list_widget.clear()
-        if not self.current_inventory:
-            item = QListWidgetItem("Este libro no tiene existencias en inventario.")
-            item.setFlags(item.flags() & ~Qt.ItemIsSelectable)
-            self.inventory_list_widget.addItem(item)
-            return
-        
-        for stock_item in self.current_inventory:
-            widget = QWidget()
-            layout = QHBoxLayout(widget)
-            
-            pos_label = QLabel(f"<b>Posición:</b> {stock_item['posicion']}")
-            qty_label = QLabel(f"<b>Cantidad:</b> {stock_item['cantidad']}")
-            
-            decrease_btn = QPushButton("Disminuir Cantidad")
-            decrease_btn.setCursor(Qt.PointingHandCursor)
-            decrease_btn.setStyleSheet(STYLES.get('button_secondary_full', '').replace('border-radius: 8px', 'border-radius: 5px'))
-            decrease_btn.setAutoDefault(False)
-            decrease_btn.clicked.connect(lambda ch, p=stock_item['posicion']: self._decrease_quantity(p))
-
-            layout.addWidget(pos_label)
-            layout.addWidget(qty_label)
-            layout.addStretch()
-            layout.addWidget(decrease_btn)
-            
-            list_item = QListWidgetItem(self.inventory_list_widget)
-            list_item.setSizeHint(widget.sizeHint())
-            self.inventory_list_widget.addItem(list_item)
-            self.inventory_list_widget.setItemWidget(list_item, widget)
-
-    def _on_inventory_item_clicked(self, item):
-        # En el futuro, podríamos querer hacer algo aquí.
-        # Por ahora, la acción está en el botón de cada item.
-        pass
-
-    def _decrease_quantity(self, posicion: str):
         isbn = self.current_book_data.get("ISBN")
-        if not isbn: return
-
         reply = QMessageBox.question(self, "Confirmar Acción",
-                                     f"¿Está seguro de que desea disminuir en 1 la cantidad del libro en la posición <b>{posicion}</b>?",
+                                     f"¿Disminuir en 1 la cantidad del libro en la posición <b>{posicion}</b>?",
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         
         if reply == QMessageBox.Yes:
             success, message = self.delete_service.decrease_book_quantity(isbn, posicion)
-            if success:
-                QMessageBox.information(self, "Éxito", message)
-                self._find_book() # Recargar la info
-            else:
-                QMessageBox.critical(self, "Error", message)
+            QMessageBox.information(self, "Resultado", message)
+            if success: self._find_book()
 
     def _delete_book_permanently(self):
+        if not self.current_book_data: return
         isbn = self.current_book_data.get("ISBN")
-        if not isbn: return
 
-        # Advertencia 1
-        reply1 = QMessageBox.warning(self, "¡ADVERTENCIA! (1/3)",
-                                     "Está a punto de <b>eliminar permanentemente</b> este libro y <b>TODAS</b> sus existencias en inventario.<br><br>"
-                                     "Esta acción <b>NO SE PUEDE DESHACER</b>.<br><br>¿Está seguro de que desea continuar?",
+        reply1 = QMessageBox.warning(self, "¡ADVERTENCIA!",
+                                     "Está a punto de <b>eliminar permanentemente</b> este libro y <b>TODAS</b> sus existencias.<br><br>"
+                                     "Esta acción <b>NO SE PUEDE DESHACER</b>. ¿Desea continuar?",
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply1 == QMessageBox.No: return
 
-        # Advertencia 2
-        reply2 = QMessageBox.warning(self, "Confirmación Final (2/3)",
-                                     "<b>Confirmación final requerida.</b><br><br>"
-                                     "Esto afectará los registros de inventario y el catálogo de libros de forma irreversible.",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply2 == QMessageBox.No: return
-
-        # Advertencia 3 - con input
-        text, ok = QInputDialog.getText(self, "Última Verificación (3/3)",
-                                        f"Para confirmar, escriba 'ELIMINAR' en el campo de abajo:")
+        text, ok = QInputDialog.getText(self, "Confirmación Final", "Para confirmar, escriba 'ELIMINAR':")
         if not (ok and text.strip().upper() == 'ELIMINAR'):
-            QMessageBox.information(self, "Cancelado", "La operación de eliminación ha sido cancelada.")
+            QMessageBox.information(self, "Cancelado", "La operación ha sido cancelada.")
             return
             
         success, message = self.delete_service.permanently_delete_book(isbn)
-        if success:
-            QMessageBox.information(self, "Éxito", message)
-            self._reset_view()
-            self.isbn_input.clear()
-        else:
-            QMessageBox.critical(self, "Error", message)
-
-    def _reset_view(self):
+        QMessageBox.information(self, "Resultado", message)
+        if success: self._reset_view(is_new_search=True)
+        
+    def _reset_view(self, is_new_search=True):
         self.details_container.setVisible(False)
+        self.image_label.clear()
+        self.image_label.setText("Busque un ISBN")
+        if is_new_search:
+            self.isbn_input.clear()
+            self.isbn_input.setFocus()
         self.current_book_data = None
-        self.current_inventory = []
+        self.inventory_entries = []
+        self.delete_permanently_button.setEnabled(False)
         self.adjustSize()
 
-    def _initial_reposition(self):
-        self.adjustSize()
+    def exec(self):
+        if self._blur_effect: self._blur_effect.setEnabled(True)
+        result = super().exec()
+        if self._blur_effect: self._blur_effect.setEnabled(False)
+        return result
+
+    def reject(self):
+        if self._blur_effect: self._blur_effect.setEnabled(False)
+        super().reject()
+        
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self.details_container.isVisible():
+            self.adjustSize()
+
+    def adjustSize(self):
+        super().adjustSize()
+        self._recenter()
+
+    def _recenter(self):
         if self.parent():
             p_geom = self.parent().geometry()
             self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, 
                       p_geom.y() + (p_geom.height() - self.height()) // 2)
-
-    def exec(self):
-        if self._blur_effect:
-            self._blur_effect.setEnabled(True)
-        result = super().exec()
-        if self._blur_effect:
-            self._blur_effect.setEnabled(False)
-        return result
-
-    def reject(self):
-        if self._blur_effect:
-            self._blur_effect.setEnabled(False)
-        super().reject() 
