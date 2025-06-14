@@ -37,14 +37,18 @@ class CardDelegate(QStyledItemDelegate):
             background_color = color_index.data(Qt.ItemDataRole.BackgroundRole)
             
             if background_color and isinstance(background_color, QColor):
-                # Usamos el QTreeWidget como padre para obtener el ancho del viewport
                 tree_widget = self.parent()
+                header = tree_widget.header()
                 
                 # Rectángulo de la fila entera
                 row_rect = tree_widget.visualRect(index)
-                row_rect.setWidth(tree_widget.viewport().width())
                 
-                # Margen vertical para el efecto "flotante". El margen horizontal lo da el QTreeWidget.
+                # --- ALINEACIÓN PRECISA ---
+                # Usamos la geometría del header como referencia para la alineación horizontal
+                row_rect.setX(header.x())
+                row_rect.setWidth(header.width())
+
+                # Margen vertical para el efecto "flotante"
                 row_rect.adjust(0, 4, 0, -4)
                 
                 painter.setBrush(background_color)
@@ -183,12 +187,11 @@ class ModifyFinancesDialog(QDialog):
             QTreeWidget { 
                 border: none;
                 background-color: transparent;
-                margin: 0 5px; /* Margen unificado para todo el tree view */
             }
             QHeaderView {
                 background-color: white;
                 border-radius: 8px;
-                margin: 0; /* El margen lo controla el QTreeWidget padre */
+                margin: 0 5px; /* Margen que seguirán las filas */
             }
             QHeaderView::section { 
                 background-color: transparent;
@@ -204,13 +207,22 @@ class ModifyFinancesDialog(QDialog):
         """)
 
         header = tree.header()
-        header.setDefaultAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        # --- Columnas con ancho fijo y no redimensionables ---
-        widths = [80, 130, 120, 480, 150, 170]
-        for i, width in enumerate(widths):
-            tree.setColumnWidth(i, width)
-            header.setSectionResizeMode(i, QHeaderView.ResizeMode.Fixed)
+        # --- Columnas con ancho fijo, no redimensionables y alineación de cabecera ---
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+
+        column_configs = [
+            {'width': 80,  'align': Qt.AlignmentFlag.AlignCenter},
+            {'width': 130, 'align': Qt.AlignmentFlag.AlignCenter},
+            {'width': 120, 'align': Qt.AlignmentFlag.AlignCenter},
+            {'width': 350, 'align': Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter},
+            {'width': 150, 'align': Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter},
+            {'width': 300, 'align': Qt.AlignmentFlag.AlignCenter}
+        ]
+
+        for i, config in enumerate(column_configs):
+            tree.setColumnWidth(i, config['width'])
+            tree.model().setHeaderData(i, Qt.Orientation.Horizontal, config['align'], Qt.ItemDataRole.TextAlignmentRole)
         
         tree.setUniformRowHeights(True)
         tree.itemDoubleClicked.connect(self._on_item_double_clicked)
