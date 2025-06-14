@@ -15,6 +15,11 @@ try:
     from features.book_info import GetBookInfo
     from features.book_api import GoogleBooksApi
     from features.delete_service import DeleteService
+    from features.egreso_service import EgresoService
+    from features.book_service import BookService
+    from features.reservation_service import ReservationService
+    from features.sell_service import SellService
+    from features.return_service import ReturnService
 except ImportError as e:
     # Si 'core' no está directamente en PYTHONPATH, intentar ajuste relativo
     # Esto es útil si 'dependencies.py' está en 'app/' y 'core' está al mismo nivel ('../core')
@@ -31,6 +36,11 @@ except ImportError as e:
     from features.book_info import GetBookInfo
     from features.book_api import GoogleBooksApi
     from features.delete_service import DeleteService
+    from features.egreso_service import EgresoService
+    from features.book_service import BookService
+    from features.reservation_service import ReservationService
+    from features.sell_service import SellService
+    from features.return_service import ReturnService
 
 
 # Determinar rutas importantes
@@ -50,6 +60,11 @@ class DependencyFactory:
     _get_book_info_instance: Optional[GetBookInfo] = None
     _http_client_instance: Optional[HttpClientInterface] = None
     _delete_service_instance: Optional[DeleteService] = None
+    _egreso_service_instance: Optional[EgresoService] = None
+    _book_service_instance: Optional[BookService] = None
+    _reservation_service_instance: Optional[ReservationService] = None
+    _sell_service_instance: Optional[SellService] = None
+    _return_service_instance: Optional[ReturnService] = None
 
     @classmethod
     def get_sql_manager(cls) -> SQLManager:
@@ -159,6 +174,48 @@ class DependencyFactory:
             cls._delete_service_instance = DeleteService(data_manager)
             print("DeleteService inicializado.")
         return cls._delete_service_instance
+
+    @classmethod
+    def get_egreso_service(cls) -> EgresoService:
+        if cls._egreso_service_instance is None:
+            data_manager = cls.get_data_manager()
+            cls._egreso_service_instance = EgresoService(data_manager)
+            print("EgresoService inicializado.")
+        return cls._egreso_service_instance
+
+    @classmethod
+    def get_book_service(cls) -> BookService:
+        if cls._book_service_instance is None:
+            data_manager = cls.get_data_manager()
+            book_info_service = cls.get_book_info_service()
+            cls._book_service_instance = BookService(data_manager, book_info_service)
+            print("BookService inicializado.")
+        return cls._book_service_instance
+
+    @classmethod
+    def get_reservation_service(cls) -> ReservationService:
+        if cls._reservation_service_instance is None:
+            data_manager = cls.get_data_manager()
+            cls._reservation_service_instance = ReservationService(data_manager)
+            print("ReservationService inicializado.")
+        return cls._reservation_service_instance
+
+    @classmethod
+    def get_sell_service(cls) -> SellService:
+        if cls._sell_service_instance is None:
+            data_manager = cls.get_data_manager()
+            book_service = cls.get_book_service()
+            cls._sell_service_instance = SellService(data_manager, book_service)
+            print("SellService inicializado.")
+        return cls._sell_service_instance
+
+    @classmethod
+    def get_return_service(cls) -> ReturnService:
+        if cls._return_service_instance is None:
+            data_manager = cls.get_data_manager()
+            cls._return_service_instance = ReturnService(data_manager)
+            print("ReturnService inicializado.")
+        return cls._return_service_instance
 
 # Para probar este módulo directamente (opcional)
 if __name__ == '__main__':

@@ -126,7 +126,7 @@ class ReservationDialog(QDialog):
     """
     Diálogo moderno para gestionar la reserva y visualización de libros apartados.
     """
-    def __init__(self, reservation_service: ReservationService, parent=None, blur_effect=None):
+    def __init__(self, reservation_service: ReservationService, parent=None):
         super().__init__(parent)
         self.reservation_service = reservation_service
         self.setWindowTitle("Nueva Reserva o Venta")
@@ -146,12 +146,6 @@ class ReservationDialog(QDialog):
 
         self.current_page = 0
         self.items_per_page = 6
-
-        self._blur_effect = blur_effect
-        if self._blur_effect:
-            self._blur_effect.setEnabled(False)
-
-        self.setModal(True)
 
         self._setup_ui()
 
@@ -950,20 +944,6 @@ class ReservationDialog(QDialog):
                 grouped[key] = {'data': item, 'count': 0}
             grouped[key]['count'] += 1
         return grouped
-
-    def _enable_blur(self, enable: bool):
-        if self._blur_effect:
-            self._blur_effect.setEnabled(enable)
-
-    def exec(self):
-        self._enable_blur(True)
-        result = super().exec()
-        self._enable_blur(False)
-        return result
-
-    def reject(self):
-        self._enable_blur(False)
-        super().reject()
 
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton and event.pos().y() <= self.top_bar_height:

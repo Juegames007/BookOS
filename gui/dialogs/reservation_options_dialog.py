@@ -15,7 +15,6 @@ class ReservationOptionsDialog(QDialog):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(500, 220)
-        self.setModal(True)
         self._setup_ui()
 
     def _setup_ui(self):
@@ -26,7 +25,7 @@ class ReservationOptionsDialog(QDialog):
         container_frame.setObjectName("containerFrame")
         container_frame.setStyleSheet("""
             QFrame#containerFrame {
-                background-color: rgba(255, 255, 255, 0.95);
+                background-color: rgba(255, 255, 255, 0.5);
                 border: 1px solid rgba(255, 255, 255, 0.4);
                 border-radius: 16px;
             }

@@ -17,7 +17,7 @@ class DeleteBookDialog(QDialog):
     """
     Diálogo rediseñado para buscar, visualizar y gestionar la eliminación de libros.
     """
-    def __init__(self, delete_service: DeleteService, parent=None, blur_effect=None):
+    def __init__(self, delete_service: DeleteService, parent=None):
         super().__init__(parent)
         self.delete_service = delete_service
         self.current_book_data = None
@@ -26,7 +26,6 @@ class DeleteBookDialog(QDialog):
         self.image_manager = ImageManager()
         self.image_manager.image_loaded.connect(self._on_image_loaded)
 
-        self._blur_effect = blur_effect
         self.setWindowTitle("Eliminar Libro")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -176,7 +175,7 @@ class DeleteBookDialog(QDialog):
     def _apply_stylesheet(self):
         self.main_frame.setStyleSheet("""
             #mainFrame {
-                background-color: rgba(243, 244, 246, 0.95);
+                background-color: rgba(243, 244, 246, 0.5);
                 border-radius: 20px;
                 border: 1px solid rgba(0, 0, 0, 0.08);
             }
@@ -256,8 +255,7 @@ class DeleteBookDialog(QDialog):
 
     def _on_image_loaded(self, image_id, pixmap):
         if self.current_book_data and image_id == self.current_book_data.get('ISBN'):
-            scaled_pixmap = pixmap.scaled(self.image_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.image_label.setPixmap(scaled_pixmap)
+            self.image_label.setPixmap(pixmap)
         else:
             self.image_label.setText("Imagen no disponible")
 
@@ -286,10 +284,12 @@ class DeleteBookDialog(QDialog):
         else: # More than 1 entry
             self.inventory_combo.clear()
             for entry in self.inventory_entries:
-                self.inventory_combo.addItem(f"{entry['posicion']}", userData=entry)
+                self.inventory_combo.addItem(f"{entry['posicion']} (Cantidad: {entry['cantidad']})", userData=entry)
             self.position_label.hide()
             self.inventory_combo.show()
-            self._update_quantity_label(self.inventory_combo.currentIndex())
+            self._update_quantity_label(0)
+
+        self.inventory_combo.setEnabled(len(self.inventory_entries) > 1)
 
     def _update_quantity_label(self, index):
         if index < 0:
@@ -297,92 +297,78 @@ class DeleteBookDialog(QDialog):
             self.decrease_qty_button.setEnabled(False)
             return
 
-        selected_data = self.inventory_combo.itemData(index)
-        if selected_data:
-            self.book_quantity_label.setText(f"Cantidad: {selected_data['cantidad']}")
+        selected_entry = self.inventory_combo.itemData(index)
+        if selected_entry:
+            self.book_quantity_label.setText(f"Cantidad: {selected_entry['cantidad']}")
             self.decrease_qty_button.setEnabled(True)
+            self.delete_permanently_button.setEnabled(True)
         else:
             self.book_quantity_label.setText("Cantidad: 0")
             self.decrease_qty_button.setEnabled(False)
+            self.delete_permanently_button.setEnabled(False)
 
     def _decrease_quantity(self):
-        posicion = ""
-        if len(self.inventory_entries) == 1:
-            posicion = self.inventory_entries[0].get('posicion')
-        elif len(self.inventory_entries) > 1:
-            current_index = self.inventory_combo.currentIndex()
-            if current_index >= 0:
-                selected_data = self.inventory_combo.itemData(current_index)
-                posicion = selected_data.get('posicion')
-
-        if not posicion:
-            QMessageBox.warning(self, "Error", "No hay una posición de inventario válida para disminuir.")
-            return
+        current_entry = self.inventory_combo.currentData()
+        if not current_entry: return
         
-        isbn = self.current_book_data.get("ISBN")
-        reply = QMessageBox.question(self, "Confirmar Acción",
-                                     f"¿Disminuir en 1 la cantidad del libro en la posición <b>{posicion}</b>?",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        success, message = self.delete_service.decrease_inventory_quantity(current_entry['id_inventario'])
         
-        if reply == QMessageBox.Yes:
-            success, message = self.delete_service.decrease_book_quantity(isbn, posicion)
-            QMessageBox.information(self, "Resultado", message)
-            if success: self._find_book()
+        if success:
+            QMessageBox.information(self, "Éxito", "La cantidad ha sido disminuida en 1.")
+            self._find_book() # Recargar
+        else:
+            QMessageBox.critical(self, "Error", message)
 
     def _delete_book_permanently(self):
         if not self.current_book_data: return
-        isbn = self.current_book_data.get("ISBN")
-
-        reply1 = QMessageBox.warning(self, "¡ADVERTENCIA!",
-                                     "Está a punto de <b>eliminar permanentemente</b> este libro y <b>TODAS</b> sus existencias.<br><br>"
-                                     "Esta acción <b>NO SE PUEDE DESHACER</b>. ¿Desea continuar?",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply1 == QMessageBox.No: return
-
-        text, ok = QInputDialog.getText(self, "Confirmación Final", "Para confirmar, escriba 'ELIMINAR':")
-        if not (ok and text.strip().upper() == 'ELIMINAR'):
-            QMessageBox.information(self, "Cancelado", "La operación ha sido cancelada.")
+        
+        isbn = self.current_book_data.get('ISBN')
+        title = self.current_book_data.get('Título')
+        
+        reply = QMessageBox.question(self, "Confirmar Eliminación",
+            f"¿Estás seguro de que quieres eliminar permanentemente el libro '{title}' (ISBN: {isbn}) "
+            "y todas sus existencias del inventario? Esta acción no se puede deshacer.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+            
+        if reply == QMessageBox.StandardButton.No:
             return
             
-        success, message = self.delete_service.permanently_delete_book(isbn)
-        QMessageBox.information(self, "Resultado", message)
-        if success: self._reset_view(is_new_search=True)
-        
+        success, message = self.delete_service.delete_book_permanently(isbn)
+        if success:
+            QMessageBox.information(self, "Éxito", f"El libro '{title}' ha sido eliminado.")
+            self._reset_view()
+        else:
+            QMessageBox.critical(self, "Error", message)
+
     def _reset_view(self, is_new_search=True):
         self.details_container.setVisible(False)
-        self.image_label.clear()
-        self.image_label.setText("Busque un ISBN")
+        self.decrease_qty_button.setEnabled(False)
+        self.delete_permanently_button.setEnabled(False)
+        self.image_label.setPixmap(QPixmap())
+        self.image_label.setText("Portada del libro")
+        self.inventory_combo.clear()
         if is_new_search:
             self.isbn_input.clear()
-            self.isbn_input.setFocus()
-        self.current_book_data = None
-        self.inventory_entries = []
-        self.delete_permanently_button.setEnabled(False)
-        self.adjustSize()
-
-    def exec(self):
-        if self._blur_effect: self._blur_effect.setEnabled(True)
-        result = super().exec()
-        if self._blur_effect: self._blur_effect.setEnabled(False)
-        return result
+        self.isbn_input.setFocus()
+        QTimer.singleShot(10, self.adjustSize)
 
     def reject(self):
-        if self._blur_effect: self._blur_effect.setEnabled(False)
         super().reject()
         
     def showEvent(self, event):
         super().showEvent(event)
-        if not self.details_container.isVisible():
-            self.adjustSize()
+        self._recenter()
 
     def adjustSize(self):
+        self.main_frame.adjustSize()
         super().adjustSize()
         self._recenter()
 
     def _recenter(self):
         if self.parent():
-            p_geom = self.parent().geometry()
-            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, 
-                      p_geom.y() + (p_geom.height() - self.height()) // 2)
+            parent_geom = self.parent().geometry()
+            self.move(parent_geom.x() + (parent_geom.width() - self.width()) / 2,
+                      parent_geom.y() + (parent_geom.height() - self.height()) / 2)
     
 print("hola")

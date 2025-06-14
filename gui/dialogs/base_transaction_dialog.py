@@ -160,7 +160,7 @@ class BaseTransactionDialog(QDialog):
         self.main_frame.setObjectName("mainFrame")
         self.main_frame.setStyleSheet(f"""
             #mainFrame {{
-                background-color: rgba(255, 255, 255, 150);
+                background-color: rgba(255, 255, 255, 0.5);
                 border-radius: 16px;
                 border: 0.5px solid white;
             }}

@@ -76,7 +76,7 @@ class CustomToggleSwitch(QWidget):
 class BookFormDialog(QDialog):
     save_requested = Signal(dict)
 
-    def __init__(self, book_service: BookService, mode: str = 'ADD', initial_isbn: Optional[str] = None, parent=None, blur_effect=None):
+    def __init__(self, book_service: BookService, mode: str = 'ADD', initial_isbn: Optional[str] = None, parent=None):
         super().__init__(parent)
         self.book_service = book_service
         self.mode = mode.upper()
@@ -101,10 +101,6 @@ class BookFormDialog(QDialog):
         self.detail_widgets_container = None
         self.action_buttons_container = None
         
-        self._blur_effect = blur_effect
-        if self._blur_effect:
-            self._blur_effect.setEnabled(False)
-        
         self._setup_ui()
         self._configure_for_mode()
         self._actualizar_estilo_guardar_button()
@@ -122,7 +118,7 @@ class BookFormDialog(QDialog):
 
         self.unified_form_frame.setStyleSheet(f"""
             QFrame#unifiedFormFrame {{
-                background-color: rgba(255, 255, 255, 0.8) !important;
+                background-color: rgba(255, 255, 255, 0.5) !important;
                 border-radius: 16px !important;
                 border: 0.5px solid white !important;
                 padding: 24px;
@@ -417,24 +413,15 @@ class BookFormDialog(QDialog):
         }
         self.save_requested.emit(book_data)
 
-    def _enable_blur(self, enable: bool):
-        if self._blur_effect:
-            self._blur_effect.setEnabled(enable)
-
     def exec(self):
-        self._enable_blur(True)
         self.adjustSize()
         self._recenter()
-        result = super().exec()
-        self._enable_blur(False)
-        return result
+        return super().exec()
     
     def reject(self):
-        self._enable_blur(False)
         super().reject()
     
     def closeEvent(self, event):
-        self._enable_blur(False)
         super().closeEvent(event)
 
     def mousePressEvent(self, event: QMouseEvent):

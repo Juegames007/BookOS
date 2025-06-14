@@ -27,7 +27,7 @@ except NameError:
 class SearchResultsWindow(QDialog):
     # INACTIVITY_TIMEOUT_MS_RESULTS = 120000 # Timer logic removed
 
-    def __init__(self, libros_encontrados: list, termino_busqueda: str, parent: QWidget = None, blur_effect=None):
+    def __init__(self, libros_encontrados: list, termino_busqueda: str, parent: QWidget = None):
         super().__init__(parent)
         # Removed original setWindowTitle, new title is static
         
@@ -41,11 +41,6 @@ class SearchResultsWindow(QDialog):
         self.setMinimumSize(800, 410) # Reduced minimum height
         self.libros_actuales = [] # Store current books for view updates
         self.termino_busqueda_actual = termino_busqueda
-
-        # Usar el efecto de desenfoque pasado desde el padre
-        self._blur_effect = blur_effect
-        if self._blur_effect:
-            self._blur_effect.setEnabled(False) # Asegurar que empieza deshabilitado
 
         # --- Main Layout --- (Vertical: Top Bar, Content Area)
         self.main_layout = QVBoxLayout(self)
@@ -212,11 +207,6 @@ class SearchResultsWindow(QDialog):
     # def eventFilter(self, obj, event: QEvent):
     #     return super().eventFilter(obj, event)
 
-    # Blur enabling/disabling logic (kept as is for now)
-    def _enable_blur(self, enable: bool):
-        if self._blur_effect:
-            self._blur_effect.setEnabled(enable)
-
     def showEvent(self, event):
         super().showEvent(event)
         if self.parent(): self._enable_blur(True)
@@ -229,15 +219,12 @@ class SearchResultsWindow(QDialog):
         return result
 
     def accept(self):
-        if self.parent() and self._blur_effect: self._enable_blur(False)
         super().accept()
 
     def reject(self):
-        if self.parent() and self._blur_effect: self._enable_blur(False)
         super().reject()
     
     def closeEvent(self, event):
-        if self.parent() and self._blur_effect: self._enable_blur(False)
         super().closeEvent(event)
 
     # Mouse events for dragging (now considers top_bar_widget as part of unified_content_card)

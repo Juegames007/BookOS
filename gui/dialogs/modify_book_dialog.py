@@ -13,7 +13,7 @@ class ModifyBookDialog(BookFormDialog):
     """
     Diálogo para modificar libros, que utiliza BookFormDialog en modo 'MODIFY'.
     """
-    def __init__(self, book_service: BookService, isbn_to_modify: Optional[str] = None, parent=None, blur_effect=None):
+    def __init__(self, book_service: BookService, isbn_to_modify: Optional[str] = None, parent=None):
         # Guarda la posición original para una actualización más precisa
         self.old_position = None
         
@@ -24,7 +24,7 @@ class ModifyBookDialog(BookFormDialog):
                 self.old_position = book_info["inventory_entries"][0].get("posicion")
 
         # Inicializa el formulario base en modo "Modificar" y carga el ISBN si se proporcionó
-        super().__init__(book_service, mode='MODIFY', initial_isbn=isbn_to_modify, parent=parent, blur_effect=blur_effect)
+        super().__init__(book_service, mode='MODIFY', initial_isbn=isbn_to_modify, parent=parent)
         
         # Conecta la señal genérica de guardado a la función específica de este diálogo
         self.save_requested.connect(self.handle_save_request)
