@@ -11,22 +11,15 @@ import os
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QFrame, QWidget, QMessageBox, QSizePolicy,
-    QSpacerItem, QGraphicsBlurEffect, QApplication
+    QSpacerItem, QGraphicsBlurEffect
 )
 from PySide6.QtGui import QFont, QPixmap, QPainter, QColor, QBrush, QMouseEvent
 from PySide6.QtCore import Qt, QPoint, Signal, QTimer, Property, QEasingCurve, QPropertyAnimation
 from typing import Dict, Any, Optional
 
-from gui.common.styles import BACKGROUND_IMAGE_PATH, COLORS, FONTS, STYLES
+from gui.common.styles import COLORS, FONTS, STYLES
 from features.book_service import BookService
 from core.validator import Validator
-
-def is_kde_arch():
-    """Verifica si el entorno de escritorio es KDE en una distribución Arch Linux."""
-    is_arch = "arch" in platform.platform().lower() or os.path.exists("/etc/arch-release")
-    is_kde = os.environ.get('DESKTOP_SESSION', '').lower() in ['plasma', 'kde'] or \
-             os.environ.get('XDG_CURRENT_DESKTOP', '').lower() in ['kde', 'plasma']
-    return is_arch and is_kde
 
 class CustomToggleSwitch(QWidget):
     """Un widget de interruptor (toggle switch) personalizado."""
@@ -86,6 +79,7 @@ class BookFormDialog(QDialog):
         super().__init__(parent)
         self.book_service = book_service
         self.mode = mode.upper()
+        self.initial_isbn = initial_isbn
         self.setWindowTitle(" ")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -94,27 +88,18 @@ class BookFormDialog(QDialog):
         self.title_bar_height = 50
         self.ultimo_isbn_procesado_con_enter = None
         self.ultima_posicion_ingresada = None
-
-        self.original_book_data: Optional[Dict[str, Any]] = None # Para guardar los datos originales
-        
+        self.original_book_data: Optional[Dict[str, Any]] = None
         self.detail_widgets_container = None
         self.action_buttons_container = None
         
-        self._blur_effect = blur_effect # Usar el efecto pasado
+        self._blur_effect = blur_effect
         if self._blur_effect:
-            self._blur_effect.setEnabled(False) # Asegurarse que empieza deshabilitado
+            self._blur_effect.setEnabled(False)
         
         self._setup_ui()
         self._configure_for_mode()
         self._actualizar_estilo_guardar_button()
-        self.adjustSize()
-        self._recenter_dialog()
-
-        if initial_isbn:
-            self.isbn_input.setText(initial_isbn)
-            self.buscar_isbn()
-        else:
-            self.isbn_input.setFocus()
+        self._initial_load()
 
     def _setup_ui(self):
         self.animation = QPropertyAnimation(self, b"maximumHeight")
@@ -198,9 +183,6 @@ class BookFormDialog(QDialog):
         self.frame_layout.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed))
 
         isbn_label = QLabel("ISBN:"); isbn_label.setObjectName("fieldLabel")
-        palette_isbn = isbn_label.palette()
-        palette_isbn.setColor(isbn_label.foregroundRole(), QColor(COLORS.get('text_primary', '#202427')))
-        isbn_label.setPalette(palette_isbn)
         self.isbn_input = QLineEdit(); self.isbn_input.setPlaceholderText("Ingresar ISBN y presionar Enter")
         self.isbn_input.returnPressed.connect(self.buscar_isbn)
         self.frame_layout.addWidget(isbn_label)
@@ -211,25 +193,11 @@ class BookFormDialog(QDialog):
         details_layout.setContentsMargins(0, 10, 0, 0); details_layout.setSpacing(8)
 
         def create_field(label, placeholder, on_enter=None):
-            w = QWidget()
-            l = QVBoxLayout(w)
-            l.setContentsMargins(0,0,0,0)
-            l.setSpacing(1)
-
-            lbl = QLabel(label)
-            lbl.setObjectName("fieldLabel")
-
-            # Añadir esta parte para forzar el color de la etiqueta
-            palette_lbl = lbl.palette()
-            palette_lbl.setColor(lbl.foregroundRole(), QColor(COLORS.get('text_primary', '#202427')))
-            lbl.setPalette(palette_lbl)
-
-            inp = QLineEdit()
-            inp.setPlaceholderText(placeholder)
+            w = QWidget(); l = QVBoxLayout(w); l.setContentsMargins(0,0,0,0); l.setSpacing(1)
+            lbl = QLabel(label); lbl.setObjectName("fieldLabel")
+            inp = QLineEdit(); inp.setPlaceholderText(placeholder)
             if on_enter: inp.returnPressed.connect(on_enter)
-
-            l.addWidget(lbl)
-            l.addWidget(inp)
+            l.addWidget(lbl); l.addWidget(inp)
             return w, inp
         
         title_w, self.titulo_input = create_field("Título:", "Título del libro", lambda: self.autor_input.setFocus())
@@ -259,12 +227,12 @@ class BookFormDialog(QDialog):
         self.cancelar_button.setFixedHeight(38)
         self.cancelar_button.setStyleSheet(STYLES.get("button_danger_full", "").replace("border-radius: 5px", "border-radius: 6px"))
         self.cancelar_button.clicked.connect(self.reject)
-        self.cancelar_button.setAutoDefault(False) # <-- CORRECCIÓN
+        self.cancelar_button.setAutoDefault(False)
         
         self.guardar_button = QPushButton("Guardar")
         self.guardar_button.setFixedHeight(38)
         self.guardar_button.clicked.connect(self.guardar_libro)
-        self.guardar_button.setAutoDefault(False) # <-- CORRECCIÓN
+        self.guardar_button.setAutoDefault(False)
 
         button_layout.addStretch(1)
         button_layout.addWidget(self.cancelar_button)
@@ -279,6 +247,23 @@ class BookFormDialog(QDialog):
         main_dialog_layout.addStretch(1)
         
         self.setLayout(main_dialog_layout)
+
+    def _initial_load(self):
+        """Carga inicial de datos si se proporciona un ISBN."""
+        if self.initial_isbn:
+            self.isbn_input.setText(self.initial_isbn)
+            self.buscar_isbn()
+        else:
+            self.adjustSize()
+            self._recenter()
+            self.isbn_input.setFocus()
+
+    def _recenter(self):
+        """Centra el diálogo en la ventana principal."""
+        if self.parent():
+            parent_geom = self.parent().geometry()
+            self.move(parent_geom.x() + (parent_geom.width() - self.width()) // 2,
+                      parent_geom.y() + (parent_geom.height() - self.height()) // 2)
 
     def _configure_for_mode(self):
         if self.mode == 'ADD':
@@ -298,10 +283,8 @@ class BookFormDialog(QDialog):
         book_details = search_result.get("book_details")
 
         if status in ["encontrado_completo", "encontrado_en_libros"]:
-            # Guardamos los detalles originales solo cuando el libro existe en nuestra BD
-            self.original_book_data = book_details 
+            self.original_book_data = book_details
         else:
-            # Si es un libro nuevo de la API o no encontrado, no hay datos originales
             self.original_book_data = None
             
         if self.mode == 'MODIFY' and status in ['no_encontrado', 'solo_api']:
@@ -311,60 +294,41 @@ class BookFormDialog(QDialog):
         self.ultimo_isbn_procesado_con_enter = isbn
         
         if status in ["encontrado_completo", "encontrado_en_libros"]:
-            # El libro ya existe en nuestra base de datos 'libros'.
             titulo_libro = book_details.get("Título", "Desconocido")
-
             if self.mode == 'ADD':
                 pos = search_result.get("inventory_entries", [{}])[0].get("posicion", "N/A")
-                msg_box = QMessageBox(self)
-                msg_box.setWindowTitle("Libro Existente")
-                msg_box.setText(f'El libro "<b>{titulo_libro}</b>" ya existe.')
-                msg_box.setInformativeText("¿Qué deseas hacer?")
+                msg_box = QMessageBox(self); msg_box.setWindowTitle("Libro Existente")
+                msg_box.setText(f'El libro "<b>{titulo_libro}</b>" ya existe.'); msg_box.setInformativeText("¿Qué deseas hacer?")
                 msg_box.setIcon(QMessageBox.Icon.Question)
-
                 btn_agregar_unidad = msg_box.addButton("Aumentar Unidad", QMessageBox.ButtonRole.YesRole)
                 btn_editar_o_nueva = msg_box.addButton("Editar/Nueva Posición", QMessageBox.ButtonRole.NoRole)
-                msg_box.addButton(QMessageBox.StandardButton.Cancel)
-
-                msg_box.exec()
-
+                msg_box.addButton(QMessageBox.StandardButton.Cancel); msg_box.exec()
                 clicked_button = msg_box.clickedButton()
                 if clicked_button == btn_agregar_unidad:
-                    # Acción directa: aumentar cantidad y resetear.
                     success, _, cantidad = self.book_service.guardar_libro_en_inventario(isbn, pos)
                     if success:
                         QMessageBox.information(self, "Éxito", f"Se incrementó la cantidad en la posición {pos}. Nueva cantidad: {cantidad}")
-                        if self.cerrar_al_terminar_toggle.isChecked():
-                            self.accept()
-                        else:
-                            self._reset_for_next_book()
-                    else:
-                        QMessageBox.warning(self, "Error", "No se pudo incrementar la cantidad.")
+                        if self.cerrar_al_terminar_toggle.isChecked(): self.accept()
+                        else: self._reset_for_next_book()
+                    else: QMessageBox.warning(self, "Error", "No se pudo incrementar la cantidad.")
                 elif clicked_button == btn_editar_o_nueva:
-                    # Mostrar formulario para editar/agregar en nueva posición
                     self._fill_form_fields(book_details, make_editable=True)
                     self.posicion_input.setText(pos)
                     self.titulo_input.setFocus()
-                else:
-                    self._reset_for_next_book()
-
+                else: self._reset_for_next_book()
             elif self.mode == 'MODIFY':
                 self._fill_form_fields(book_details, make_editable=True)
                 self.isbn_input.setReadOnly(True)
                 self.titulo_input.setFocus()
-
         elif status == "solo_api":
-            # Encontrado solo en línea. Llenar el formulario para agregar.
             QMessageBox.information(self, "Información de Libro Obtenida", "Datos encontrados en línea. Por favor, verifique y complete la información.")
             self._fill_form_fields(book_details, make_editable=True)
             self.precio_input.setFocus()
-
         elif status == "no_encontrado":
-            # No se encontró en ningún lado.
             if self.mode == 'MODIFY':
                 QMessageBox.critical(self, "Error", f"No se encontró el libro con ISBN {isbn} para modificar.")
                 self._reset_for_next_book()
-            else: # modo ADD
+            else:
                 QMessageBox.information(self, "Libro no Encontrado", "Por favor, ingrese los datos manualmente.")
                 self._fill_form_fields({}, make_editable=True)
                 self.titulo_input.setFocus()
@@ -388,7 +352,6 @@ class BookFormDialog(QDialog):
         self.save_requested.emit(book_data)
 
     def _enable_blur(self, enable: bool):
-        """Activa o desactiva el efecto de desenfoque en el widget padre."""
         if self._blur_effect:
             self._blur_effect.setEnabled(enable)
 
@@ -406,17 +369,14 @@ class BookFormDialog(QDialog):
         self._enable_blur(False)
         super().closeEvent(event)
 
-    def _recenter_dialog(self):
-        if self.parent():
-            p_geom = self.parent().geometry()
-            self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, p_geom.y() + (p_geom.height() - self.height()) // 2)
-
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton and event.pos().y() < self.title_bar_height:
             self._drag_pos = event.globalPosition().toPoint() - self.frameGeometry().topLeft(); event.accept()
+    
     def mouseMoveEvent(self, event: QMouseEvent):
         if event.buttons() == Qt.MouseButton.LeftButton and not self._drag_pos.isNull():
             self.move(event.globalPosition().toPoint() - self._drag_pos); event.accept()
+    
     def mouseReleaseEvent(self, event: QMouseEvent):
         self._drag_pos = QPoint(); event.accept()
 
@@ -429,26 +389,34 @@ class BookFormDialog(QDialog):
         self.precio_input.setReadOnly(not make_editable)
         self.posicion_input.setReadOnly(not make_editable)
         self.imagen_input.setText(details.get("Imagen", "")); self.imagen_input.setReadOnly(not make_editable)
+        
         if not self.detail_widgets_container.isVisible():
             self.detail_widgets_container.setVisible(True)
             self.animation.setTargetObject(self.detail_widgets_container)
             self.animation.setStartValue(0)
             self.animation.setEndValue(self.detail_widgets_container.sizeHint().height())
             self.animation.start()
+        
         self.action_buttons_container.setVisible(True)
         self.guardar_button.setEnabled(make_editable)
         self._actualizar_estilo_guardar_button()
-        self.adjustSize(); self._recenter_dialog()
+        
+        QTimer.singleShot(10, self.adjustSize)
+        QTimer.singleShot(11, self._recenter)
         
     def _reset_for_next_book(self):
         for field in [self.titulo_input, self.autor_input, self.editorial_input, self.categorias_input, self.precio_input, self.posicion_input, self.imagen_input]:
             field.clear(); field.setReadOnly(True)
         self.isbn_input.clear(); self.isbn_input.setReadOnly(False)
+        
         if self.detail_widgets_container.isVisible():
             self.detail_widgets_container.setVisible(False)
         self.action_buttons_container.setVisible(False)
-        self.guardar_button.setEnabled(False); self._actualizar_estilo_guardar_button()
-        self.setMinimumSize(0, 0); self.adjustSize(); self._recenter_dialog()
+        self.guardar_button.setEnabled(False)
+        self._actualizar_estilo_guardar_button()
+        
+        QTimer.singleShot(10, self.adjustSize)
+        QTimer.singleShot(11, self._recenter)
         self.isbn_input.setFocus()
     
     def _formatear_texto_precio(self):
