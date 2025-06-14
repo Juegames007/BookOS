@@ -1,8 +1,8 @@
 import sys
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QMessageBox,
                              QWidget, QLabel, QSpacerItem, QSizePolicy, QApplication,
-                             QTreeWidget, QTreeWidgetItem, QHeaderView, QStyledItemDelegate)
-from PySide6.QtCore import Qt, QDate, QPoint, QSize
+                             QTreeWidget, QTreeWidgetItem, QHeaderView, QStyledItemDelegate, QStyle, QStyleOptionViewItem)
+from PySide6.QtCore import Qt, QDate, QPoint, QSize, QModelIndex
 from PySide6.QtGui import QFont, QIcon, QMouseEvent, QColor, QPainter, QBrush, QPen, QFontDatabase
 from datetime import datetime
 import logging
@@ -56,32 +56,52 @@ class CardDelegate(QStyledItemDelegate):
                 painter.drawRoundedRect(row_rect, 8, 8)
 
         # --- 2. Dibuja el contenido de la celda (texto) ---
-        text = index.data(Qt.ItemDataRole.DisplayRole)
-        if text:
-            # Rectángulo de la celda actual
-            text_rect = option.rect
-            text_rect.adjust(8, 0, -8, 0)  # Padding horizontal para el texto
+        # No dibujamos el texto si un editor está activo sobre esta celda
+        if not (option.state & QStyle.StateFlag.State_Editing):
+            text = index.data(Qt.ItemDataRole.DisplayRole)
+            if text:
+                # Rectángulo de la celda actual
+                text_rect = option.rect
+                text_rect.adjust(8, 0, -8, 0)  # Padding horizontal para el texto
 
-            # Color del texto (si no, usará el de la paleta por defecto)
-            text_color = index.data(Qt.ItemDataRole.ForegroundRole)
-            if text_color and isinstance(text_color, QBrush):
-                 painter.setPen(QPen(text_color.color()))
-            else:
-                 painter.setPen(QPen(QColor("black")))
+                # Color del texto (si no, usará el de la paleta por defecto)
+                text_color = index.data(Qt.ItemDataRole.ForegroundRole)
+                if text_color and isinstance(text_color, QBrush):
+                     painter.setPen(QPen(text_color.color()))
+                else:
+                     painter.setPen(QPen(QColor("black")))
 
-            # Alineación del texto
-            alignment = index.data(Qt.ItemDataRole.TextAlignmentRole)
-            if alignment is None:
-                alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
-            
-            # Fuente del texto
-            font = index.data(Qt.ItemDataRole.FontRole)
-            if font and isinstance(font, QFont):
-                painter.setFont(font)
+                # Alineación del texto
+                alignment = index.data(Qt.ItemDataRole.TextAlignmentRole)
+                if alignment is None:
+                    alignment = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+                
+                # Fuente del texto
+                font = index.data(Qt.ItemDataRole.FontRole)
+                if font and isinstance(font, QFont):
+                    painter.setFont(font)
 
-            painter.drawText(text_rect, int(alignment), text)
+                painter.drawText(text_rect, int(alignment), text)
 
         painter.restore()
+
+    def createEditor(self, parent: QWidget, option: QStyleOptionViewItem, index: QModelIndex) -> QWidget:
+        """ Crea y estiliza el editor para la celda. """
+        editor = super().createEditor(parent, option, index)
+        if editor:
+            editor.setStyleSheet("""
+                QLineEdit {
+                    color: black;
+                    background-color: white;
+                    border: 1px solid #a9a9a9;
+                    border-radius: 4px;
+                    padding: 4px;
+                }
+            """)
+            # Asegurarse de que el editor dibuje su propio fondo opaco,
+            # ocultando así el texto que el delegate dibuja debajo.
+            editor.setAutoFillBackground(True)
+        return editor
 
 class ModifyFinancesDialog(QDialog):
     def __init__(self, finance_service: FinanceService, parent=None):
