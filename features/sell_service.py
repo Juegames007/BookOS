@@ -51,7 +51,7 @@ class SellService:
             )
             return cursor.lastrowid
 
-    def process_sale(self, items: List[Dict[str, Any]], total_amount: float, notes: str = "") -> (bool, str):
+    def process_sale(self, items: List[Dict[str, Any]], total_amount: float, payment_method: str, notes: str = "") -> (bool, str):
         """
         Procesa una venta, actualiza el inventario y registra la transacción.
         """
@@ -80,8 +80,8 @@ class SellService:
                         raise ValueError(f"Stock insuficiente para el libro con ISBN {isbn}. Solicitado: {quantity_to_sell}, Disponible: {current_stock}")
 
             # 3. Crear un nuevo registro en la tabla 'ventas'
-            sale_data = (client_id, total_amount, notes)
-            cursor.execute("INSERT INTO ventas (id_cliente, monto_total, notas) VALUES (?, ?, ?)", sale_data)
+            sale_data = (client_id, total_amount, payment_method, notes)
+            cursor.execute("INSERT INTO ventas (id_cliente, monto_total, metodo_pago, notas) VALUES (?, ?, ?, ?)", sale_data)
             sale_id = cursor.lastrowid
             if not sale_id:
                 raise Exception("No se pudo crear el registro de venta.")

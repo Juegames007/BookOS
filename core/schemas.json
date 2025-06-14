@@ -22,7 +22,7 @@
       },
       {
         "nombre": "ventas",
-        "definicion": "(id_venta INTEGER PRIMARY KEY AUTOINCREMENT, id_cliente INTEGER NOT NULL, id_reserva_origen INTEGER, monto_total REAL NOT NULL, notas TEXT, fecha_venta DATETIME DEFAULT (datetime('now')), FOREIGN KEY (id_cliente) REFERENCES clientes (id_cliente) ON DELETE RESTRICT, FOREIGN KEY (id_reserva_origen) REFERENCES reservas (id_reserva) ON DELETE SET NULL)"
+        "definicion": "(id_venta INTEGER PRIMARY KEY AUTOINCREMENT, id_cliente INTEGER NOT NULL, id_reserva_origen INTEGER, monto_total REAL NOT NULL, metodo_pago TEXT NOT NULL, notas TEXT, fecha_venta DATETIME DEFAULT (datetime('now')), FOREIGN KEY (id_cliente) REFERENCES clientes (id_cliente) ON DELETE RESTRICT, FOREIGN KEY (id_reserva_origen) REFERENCES reservas (id_reserva) ON DELETE SET NULL)"
       },
       {
         "nombre": "detalles_venta",

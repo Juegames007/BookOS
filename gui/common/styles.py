@@ -197,6 +197,26 @@ STYLES = {
         }}
     """,
 
+    "button_toggle_style": """
+        QPushButton {
+            background-color: #F3F4F6;
+            color: #4B5563;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            padding: 8px 12px;
+            text-align: left;
+        }
+        QPushButton:hover {
+            background-color: #E5E7EB;
+        }
+        QPushButton:checked {
+            background-color: #D1D5DB;
+            color: #1F2937;
+            border: 1px solid #9CA3AF;
+            font-weight: bold;
+        }
+    """,
+
     "button_tertiary_full": f"""
         QPushButton {{
             background-color: rgba(0, 0, 0, 0.05);

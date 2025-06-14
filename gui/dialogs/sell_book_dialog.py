@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QFrame, QHBoxLayout, 
-                             QSpacerItem, QSizePolicy, QPushButton, QLineEdit, QScrollArea, QWidget, QMessageBox, QGridLayout)
+                             QSpacerItem, QSizePolicy, QPushButton, QLineEdit, QScrollArea, QWidget, QMessageBox, QGridLayout, QButtonGroup)
 from PySide6.QtCore import Qt, QSize, QTimer, Signal
 from PySide6.QtGui import QFont, QIcon, QPainter, QScreen
 import uuid
@@ -144,6 +144,7 @@ class SellBookDialog(BaseTransactionDialog):
         super().__init__(parent)
         self.book_service = book_service
         self.sell_service = sell_service
+        self.payment_method = None
 
     def get_dialog_title(self) -> str:
         return "Vender Artículos"
@@ -171,6 +172,45 @@ class SellBookDialog(BaseTransactionDialog):
 
         self.disc_btn.clicked.connect(self._add_disc_item)
         self.promo_btn.clicked.connect(self._add_promo_item)
+
+    def setup_extra_widgets(self, layout: QVBoxLayout):
+        payment_widget = QWidget()
+        payment_layout = QHBoxLayout(payment_widget)
+        payment_layout.setContentsMargins(0, 10, 0, 5)
+        payment_layout.setSpacing(15)
+
+        label = QLabel("Método de pago:")
+        label.setFont(QFont(FONTS["family"], 10, QFont.Weight.Bold))
+        label.setStyleSheet(f"color: {COLORS['text_primary']};")
+        payment_layout.addWidget(label)
+
+        self.payment_button_group = QButtonGroup(self)
+        self.payment_button_group.setExclusive(True)
+
+        buttons_data = [
+            {"text": "Efectivo", "icon": "dinero.png"},
+            {"text": "Nequi", "icon": "nequi.png"},
+            {"text": "Daviplata", "icon": "daviplata.png"}
+        ]
+
+        for data in buttons_data:
+            btn = QPushButton(QIcon(get_icon_path(data["icon"])), f" {data['text']}")
+            btn.setIconSize(QSize(24, 24))
+            btn.setCheckable(True)
+            btn.setFixedHeight(40)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFont(QFont(FONTS["family"], 10))
+            btn.setStyleSheet(STYLES['button_toggle_style'])
+            self.payment_button_group.addButton(btn)
+            payment_layout.addWidget(btn)
+
+        self.payment_button_group.buttonClicked.connect(self._on_payment_method_selected)
+
+        payment_layout.addStretch()
+        layout.addWidget(payment_widget)
+
+    def _on_payment_method_selected(self, button):
+        self.payment_method = button.text().strip()
 
     def _handle_add_item_from_isbn(self):
         isbn = self.isbn_input.text().strip()
@@ -224,12 +264,17 @@ class SellBookDialog(BaseTransactionDialog):
             QMessageBox.warning(self, "Venta Vacía", "No hay artículos para vender.")
             return
 
+        if not self.payment_method:
+            QMessageBox.warning(self, "Método de Pago", "Por favor, seleccione un método de pago.")
+            return
+
         total_amount = self.manual_total if self.manual_total is not None else self._calculate_base_total()
         final_items = self._group_items(self.transaction_items)
         
         success, message = self.sell_service.process_sale(
             items=final_items,
-            total_amount=total_amount
+            total_amount=total_amount,
+            payment_method=self.payment_method
         )
 
         if success:

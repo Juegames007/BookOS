@@ -194,6 +194,8 @@ class BaseTransactionDialog(QDialog):
         self.page_nav_container.setVisible(False)
         content_layout.addWidget(self.page_nav_container)
 
+        self.setup_extra_widgets(content_layout)
+
         self.footer_container = QWidget()
         footer_layout = self._create_footer_layout()
         self.footer_container.setLayout(footer_layout)
@@ -525,9 +527,15 @@ class BaseTransactionDialog(QDialog):
         return "Ingresar ISBN del libro..."
 
     def setup_action_buttons(self, layout: QHBoxLayout):
-        pass # Subclases pueden añadir botones aquí
+        """Placeholder method for subclasses to add action buttons."""
+        pass
+
+    def setup_extra_widgets(self, layout: QVBoxLayout):
+        """Placeholder method for subclasses to add extra widgets."""
+        pass
 
     def _handle_add_item_from_isbn(self):
+        """Must be implemented by subclasses to handle adding items via ISBN."""
         raise NotImplementedError("Subclasses must implement _handle_add_item_from_isbn")
 
     def handle_confirm(self):
