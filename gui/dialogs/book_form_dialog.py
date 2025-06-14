@@ -102,9 +102,9 @@ class BookFormDialog(QDialog):
         self._initial_load()
 
     def _setup_ui(self):
-        self.animation = QPropertyAnimation(self, b"maximumHeight")
-        self.animation.setDuration(300)
-        self.animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        # self.animation = QPropertyAnimation(self, b"maximumHeight")
+        # self.animation.setDuration(300)
+        # self.animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
         main_dialog_layout = QVBoxLayout(self)
         main_dialog_layout.setContentsMargins(0, 0, 0, 0)
         main_dialog_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -400,10 +400,10 @@ class BookFormDialog(QDialog):
         
         if not self.detail_widgets_container.isVisible():
             self.detail_widgets_container.setVisible(True)
-            self.animation.setTargetObject(self.detail_widgets_container)
-            self.animation.setStartValue(0)
-            self.animation.setEndValue(self.detail_widgets_container.sizeHint().height())
-            self.animation.start()
+            # self.animation.setTargetObject(self.detail_widgets_container)
+            # self.animation.setStartValue(0)
+            # self.animation.setEndValue(self.detail_widgets_container.sizeHint().height())
+            # self.animation.start()
         
         self.action_buttons_container.setVisible(True)
         self.guardar_button.setEnabled(make_editable)
