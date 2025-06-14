@@ -3,12 +3,80 @@ from PySide6.QtWidgets import (QDialog, QVBoxLayout, QListWidget, QListWidgetIte
                              QSizePolicy, QStackedWidget, QLineEdit, QMessageBox, QButtonGroup,
                              QGraphicsDropShadowEffect, QInputDialog)
 from PySide6.QtGui import (QFont, QPainter, QColor, QBrush, QPen, QFontMetrics,
-                         QFontDatabase, QPainterPath, QPixmap, QMouseEvent)
+                         QFontDatabase, QPainterPath, QPixmap, QMouseEvent, QIcon)
 from PySide6.QtCore import Qt, QSize, QPropertyAnimation, QPoint, QEasingCurve, Property
 from datetime import datetime
 from features.reservation_service import ReservationService
 from gui.resources.sfsymbols import SFSymbols
 from gui.common.utils import format_price
+from gui.common.styles import STYLES, FONTS
+import os
+
+class FinalPaymentDialog(QDialog):
+    def __init__(self, due_amount, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Confirmar Pago Final")
+        self.setModal(True)
+        self.payment_method = None
+        self.final_payment = due_amount
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+
+        info_label = QLabel(f"Monto restante: <b>${format_price(due_amount)}</b><br>Ingrese el pago final recibido y seleccione el método.")
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+
+        self.amount_input = QLineEdit(f"{due_amount:.0f}")
+        self.amount_input.setFixedHeight(38)
+        self.amount_input.textChanged.connect(self._on_input_change)
+        layout.addWidget(self.amount_input)
+
+        self.payment_button_group = QButtonGroup(self)
+        self.payment_button_group.setExclusive(True)
+        
+        buttons_layout = QHBoxLayout()
+        buttons_data = [
+            {"text": "Efectivo", "icon": "dinero.png"},
+            {"text": "Nequi", "icon": "nequi.png"},
+            {"text": "Daviplata", "icon": "daviplata.png"}
+        ]
+
+        for data in buttons_data:
+            icon_path = os.path.join("app", "imagenes", data["icon"])
+            btn = QPushButton(QIcon(icon_path), f" {data['text']}")
+            btn.setIconSize(QSize(22, 22))
+            btn.setCheckable(True)
+            btn.setFixedHeight(40)
+            if STYLES.get('button_toggle_transparent_style'):
+                btn.setStyleSheet(STYLES['button_toggle_transparent_style'])
+            self.payment_button_group.addButton(btn)
+            buttons_layout.addWidget(btn)
+
+        self.payment_button_group.buttonClicked.connect(self._on_input_change)
+        layout.addLayout(buttons_layout)
+
+        self.confirm_button = QPushButton("Confirmar")
+        self.confirm_button.setFixedHeight(40)
+        self.confirm_button.setEnabled(False)
+        self.confirm_button.clicked.connect(self.accept)
+        layout.addWidget(self.confirm_button)
+
+    def _on_input_change(self, *args):
+        try:
+            self.final_payment = float(self.amount_input.text())
+            is_valid_amount = self.final_payment > 0
+        except ValueError:
+            is_valid_amount = False
+        
+        has_method = self.payment_button_group.checkedButton() is not None
+        if has_method:
+            self.payment_method = self.payment_button_group.checkedButton().text().strip()
+
+        self.confirm_button.setEnabled(has_method and is_valid_amount)
+
+    def get_values(self):
+        return self.final_payment, self.payment_method
 
 class ElidedLabel(QLabel):
     def __init__(self, text, parent=None):
@@ -197,6 +265,7 @@ class ExistingReservationsDialog(QDialog):
         self.current_reservation_id = None
         self.current_reservation_details = None
         self.needs_list_refresh = False
+        self.deposit_payment_method = None
 
         if QFontDatabase.addApplicationFont(":/fonts/Montserrat-Regular.ttf") == -1:
             print("Warning: Could not load Montserrat-Regular.ttf")
@@ -376,7 +445,7 @@ class ExistingReservationsDialog(QDialog):
         
         # Base height: header + financial summary + buttons, etc.
         # Item height: height of one ReservedItemWidget + spacing
-        self._adjust_dialog_height(item_count=rows, item_height=85, base_height=470, max_height=170)
+        self._adjust_dialog_height(item_count=rows, item_height=85, base_height=520, max_height=170)
 
         self.detail_view_widget = self._build_detail_widget(details)
         
@@ -644,30 +713,68 @@ class ExistingReservationsDialog(QDialog):
         amounts_layout.addWidget(due_widget, 1)
         financial_section_layout.addLayout(amounts_layout)
 
-        deposit_layout = QHBoxLayout()
-        deposit_layout.setSpacing(10)
+        deposit_section_frame = QFrame()
+        deposit_section_frame.setStyleSheet("background: transparent;")
+        deposit_section_layout = QVBoxLayout(deposit_section_frame)
+        deposit_section_layout.setContentsMargins(0,10,0,0)
+        deposit_section_layout.setSpacing(10)
+
+        deposit_input_layout = QHBoxLayout()
+        deposit_input_layout.setSpacing(10)
+        
         self.deposit_input = QLineEdit()
-        self.deposit_input.setPlaceholderText("Ingresar abono...")
-        self.deposit_input.setStyleSheet("QLineEdit { color: black; border-radius: 8px; padding: 6px 10px; border: 1px solid #CBD5E0; }")
+        self.deposit_input.setPlaceholderText("Ingresar monto de abono...")
+        self.deposit_input.setStyleSheet("QLineEdit { color: black; border-radius: 8px; padding: 10px; border: 1px solid #CBD5E0; }")
+        self.deposit_input.setFixedHeight(40)
         self.deposit_input.textChanged.connect(self._format_deposit_input)
         
-        deposit_button = QPushButton("Añadir Abono")
-        deposit_button.setCursor(Qt.PointingHandCursor)
-        deposit_button.clicked.connect(self._handle_add_deposit)
-        deposit_button.setStyleSheet("""
-            QPushButton { 
-                background-color: #3182CE; color: white; border: none; 
-                border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #2B6CB0; }
-        """)
+        self.add_deposit_button = QPushButton()
+        self.add_deposit_button.setIcon(QIcon(os.path.join("app", "imagenes", "enter.png")))
+        self.add_deposit_button.setFixedSize(40, 40)
+        self.add_deposit_button.setIconSize(QSize(28, 28))
+        self.add_deposit_button.setCursor(Qt.PointingHandCursor)
+        self.add_deposit_button.clicked.connect(self._handle_add_deposit)
         
-        deposit_layout.addWidget(self.deposit_input, 1)
-        deposit_layout.addWidget(deposit_button)
-        financial_section_layout.addLayout(deposit_layout)
+        deposit_input_layout.addWidget(self.deposit_input, 1)
+        deposit_input_layout.addWidget(self.add_deposit_button)
+        deposit_section_layout.addLayout(deposit_input_layout)
+        
+        deposit_buttons_layout = QHBoxLayout()
+        deposit_buttons_layout.setSpacing(10)
+        self.deposit_button_group = QButtonGroup(self)
+        self.deposit_button_group.setExclusive(True)
+
+        buttons_data = [
+            {"text": "Efectivo", "icon": "dinero.png"},
+            {"text": "Nequi", "icon": "nequi.png"},
+            {"text": "Daviplata", "icon": "daviplata.png"}
+        ]
+
+        for data in buttons_data:
+            icon_path = os.path.join("app", "imagenes", data["icon"])
+            btn = QPushButton(QIcon(icon_path), f" {data['text']}")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setIconSize(QSize(22, 22))
+            btn.setCheckable(True)
+            btn.setFixedHeight(40)
+            btn.setStyleSheet(STYLES.get('button_toggle_transparent_style', ""))
+            btn.clicked.connect(lambda checked, b=btn: self._on_deposit_method_selected(b))
+            self.deposit_button_group.addButton(btn)
+            deposit_buttons_layout.addWidget(btn)
+        
+        deposit_section_layout.addLayout(deposit_buttons_layout)
+        financial_section_layout.addWidget(deposit_section_frame)
         
         return financial_section_layout
 
+    def _on_deposit_method_selected(self, button):
+        if button.isChecked():
+            self.deposit_payment_method = button.text().strip()
+        else:
+            # This case happens if the group is not exclusive, but good practice
+            if self.deposit_payment_method == button.text().strip():
+                self.deposit_payment_method = None
+                
     def show_list_view(self):
         self.slide_to_widget_index(0)
         # Re-ajustar al volver a la lista
@@ -792,11 +899,16 @@ class ExistingReservationsDialog(QDialog):
         paid_amount = self.current_reservation_details.get('monto_abonado', 0)
         due_amount = total_amount - paid_amount
 
-        final_payment, ok = QInputDialog.getDouble(self, "Pago Final", f"Monto restante: ${format_price(due_amount)}<br>Ingrese el pago final recibido:", 
-                                                   due_amount, 0, 10000000, 2)
-        if ok:
+        dialog = FinalPaymentDialog(due_amount, self)
+        if dialog.exec() == QDialog.Accepted:
+            final_payment, payment_method = dialog.get_values()
+            
+            if not payment_method:
+                QMessageBox.warning(self, "Error", "Debe seleccionar un método de pago.")
+                return
+
             success, message = self.reservation_service.convert_reservation_to_sale(
-                self.current_reservation_id, final_payment)
+                self.current_reservation_id, final_payment, payment_method)
             
             if success:
                 QMessageBox.information(self, "Éxito", message)
@@ -862,7 +974,8 @@ class ExistingReservationsDialog(QDialog):
         self.deposit_input.blockSignals(False)
 
     def _handle_add_deposit(self):
-        if not self.current_reservation_id:
+        if not self.current_reservation_id or not self.deposit_payment_method:
+            QMessageBox.warning(self, "Método de Pago", "Por favor, seleccione un método de pago para el abono.")
             return
 
         deposit_text = self.deposit_input.text().strip().replace(".", "").replace(",", "")
@@ -884,22 +997,33 @@ class ExistingReservationsDialog(QDialog):
         current_paid = self.current_reservation_details.get('monto_abonado', 0)
         current_due = current_total - current_paid
         
-        if deposit_amount > current_due:
+        if deposit_amount > current_due + 0.01: # Allow for float precision issues
             QMessageBox.warning(self, "Monto Excedido", f"El abono no puede ser mayor que el saldo pendiente (${format_price(current_due)}).")
             return
 
+        # Check if this deposit will finalize the payment
+        if abs(deposit_amount - current_due) < 0.01:
+            reply = QMessageBox.question(self, "Finalizar Venta",
+                                         f"<b>¡Atención!</b><br><br>Este abono de <b>${format_price(deposit_amount)}</b> cubre el saldo restante.<br><br>¿Deseas finalizar la reserva y convertirla en una venta?",
+                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            if reply == QMessageBox.Yes:
+                self._finalize_sale_from_deposit(deposit_amount, self.deposit_payment_method)
+            return
+
+        # Standard deposit logic
         reply = QMessageBox.question(self, "Confirmar Abono",
-                                     f"<b>¡Atención!</b><br><br>¿Estás seguro de que deseas añadir un abono de <b>${format_price(deposit_amount)}</b> a esta reserva?<br><br>Esta acción afectará los registros financieros.",
+                                     f"<b>¡Atención!</b><br><br>¿Estás seguro de que deseas añadir un abono de <b>${format_price(deposit_amount)}</b> a esta reserva?",
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
         if reply == QMessageBox.No:
             return
 
-        success, message = self.reservation_service.add_deposit_to_reservation(self.current_reservation_id, deposit_amount)
+        success, message = self.reservation_service.add_deposit_to_reservation(self.current_reservation_id, deposit_amount, self.deposit_payment_method)
 
         if success:
             QMessageBox.information(self, "Éxito", "Abono añadido con éxito.")
             
+            # Manually update details to reflect the change immediately
             new_paid_amount = current_paid + deposit_amount
             self.current_reservation_details['monto_abonado'] = new_paid_amount
             new_due_amount = current_due - deposit_amount
@@ -907,10 +1031,26 @@ class ExistingReservationsDialog(QDialog):
             self.paid_value_label.setText(f"${format_price(new_paid_amount)}")
             self.due_value_label.setText(f"${format_price(new_due_amount)}")
             self.deposit_input.clear()
+            self.deposit_button_group.setExclusive(False) # Hack to allow unchecking
+            if self.deposit_button_group.checkedButton():
+                self.deposit_button_group.checkedButton().setChecked(False)
+            self.deposit_button_group.setExclusive(True)
+            self.deposit_payment_method = None
             
             self.needs_list_refresh = True
         else:
             QMessageBox.critical(self, "Error", f"No se pudo añadir el abono:\n{message}")
+
+    def _finalize_sale_from_deposit(self, final_payment, payment_method):
+        success, message = self.reservation_service.convert_reservation_to_sale(
+            self.current_reservation_id, final_payment, payment_method
+        )
+        if success:
+            QMessageBox.information(self, "Éxito", message)
+            self.needs_list_refresh = True
+            self.show_list_view()
+        else:
+            QMessageBox.critical(self, "Error", f"No se pudo completar la operación:\n{message}")
 
     def load_reservations(self):
         reservations = self.reservation_service.get_all_reservations()

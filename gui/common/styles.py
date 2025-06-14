@@ -217,6 +217,31 @@ STYLES = {
         }
     """,
 
+    "button_toggle_transparent_style": """
+        QPushButton {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: #000000;
+            border: 1px solid #000000;
+            border-radius: 8px;
+            padding: 8px 12px;
+            text-align: center;
+        }
+        QPushButton:hover {
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+        QPushButton:checked {
+            background-color: #28a745;
+            color: white;
+            border: 1px solid #28a745;
+            font-weight: bold;
+        }
+        QPushButton:disabled {
+            background-color: rgba(200, 200, 200, 0.1);
+            color: #999999;
+            border: 1px solid #999999;
+        }
+    """,
+
     "button_tertiary_full": f"""
         QPushButton {{
             background-color: rgba(0, 0, 0, 0.05);

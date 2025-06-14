@@ -91,7 +91,7 @@ class ReservationService:
             print(f"Error en get_or_create_client: {e}")
             return {"status": "error", "message": f"Error de base de datos: {e}"}
 
-    def create_reservation(self, client_id: int, book_items: List[Dict], total_amount: float, paid_amount: float, notes: str = "") -> Tuple[bool, str]:
+    def create_reservation(self, client_id: int, book_items: List[Dict], total_amount: float, paid_amount: float, payment_method: str, notes: str = "") -> Tuple[bool, str]:
         """
         Crea una nueva reserva, actualiza el inventario y registra el abono inicial en 'ingresos'.
         """
@@ -103,10 +103,10 @@ class ReservationService:
         try:
             # 1. Crear la entrada en la tabla 'reservas'
             reserva_query = """
-                INSERT INTO reservas (id_cliente, monto_total, estado, notas, fecha_creacion, fecha_actualizacion)
-                VALUES (?, ?, 'PENDIENTE', ?, datetime('now'), datetime('now'))
+                INSERT INTO reservas (id_cliente, monto_total, estado, notas, metodo_pago_inicial, fecha_creacion, fecha_actualizacion)
+                VALUES (?, ?, 'PENDIENTE', ?, ?, datetime('now'), datetime('now'))
             """
-            reserva_params = (client_id, total_amount, notes)
+            reserva_params = (client_id, total_amount, notes, payment_method)
             cursor = self.data_manager.execute_query(reserva_query, reserva_params)
 
             if not cursor or not cursor.lastrowid:
@@ -120,9 +120,9 @@ class ReservationService:
             client_name = client_result[0]['nombre'] if client_result else "Cliente Desconocido"
 
             # 2. Registrar el abono inicial como un ingreso
-            ingreso_query = "INSERT INTO ingresos (monto, concepto, id_reserva) VALUES (?, ?, ?)"
+            ingreso_query = "INSERT INTO ingresos (monto, concepto, metodo_pago, id_reserva) VALUES (?, ?, ?, ?)"
             concepto_ingreso = f"Abono inicial de {client_name} para reserva #{id_reserva}"
-            self.data_manager.execute_query(ingreso_query, (paid_amount, concepto_ingreso, id_reserva))
+            self.data_manager.execute_query(ingreso_query, (paid_amount, concepto_ingreso, payment_method, id_reserva))
 
             # 3. Procesar inventario y detalles de la reserva
             from collections import defaultdict
@@ -306,28 +306,31 @@ class ReservationService:
 
         return reservation_details
 
-    def add_deposit_to_reservation(self, reservation_id: int, amount: float) -> Tuple[bool, str]:
+    def add_deposit_to_reservation(self, reservation_id: int, amount: float, payment_method: str) -> Tuple[bool, str]:
         """
-        Añade un abono a una reserva existente y lo registra en la tabla de ingresos.
-
-        :param reservation_id: El ID de la reserva.
-        :param amount: El monto a abonar.
-        :return: Una tupla (éxito, mensaje).
+        Añade un abono a una reserva existente y registra el ingreso.
         """
         if amount <= 0:
             return False, "El monto del abono debe ser positivo."
+
         try:
-            # Registrar el abono como un ingreso
-            ingreso_query = "INSERT INTO ingresos (monto, concepto, id_reserva) VALUES (?, ?, ?)"
+            # Registrar el ingreso
+            ingreso_query = "INSERT INTO ingresos (monto, concepto, metodo_pago, id_reserva) VALUES (?, ?, ?, ?)"
             concepto = f"Abono adicional para reserva #{reservation_id}"
-            self.data_manager.execute_query(ingreso_query, (amount, concepto, reservation_id))
+            self.data_manager.execute_query(ingreso_query, (amount, concepto, payment_method, reservation_id))
+
+            # Actualizar la fecha de la reserva para reflejar actividad reciente
+            update_reserva_query = "UPDATE reservas SET fecha_actualizacion = datetime('now') WHERE id_reserva = ?"
+            self.data_manager.execute_query(update_reserva_query, (reservation_id,))
+            
             return True, "Abono añadido con éxito."
         except Exception as e:
-            return False, f"Error al añadir el abono: {str(e)}"
+            return False, f"Error al añadir el abono: {e}"
 
     def cancel_reservation(self, reservation_id: int, with_refund: bool) -> Tuple[bool, str]:
         """
-        Cancela una reserva, revierte el inventario y maneja la contabilidad.
+        Cancela una reserva, opcionalmente registra un egreso por el monto abonado
+        y devuelve los libros al inventario.
 
         :param reservation_id: El ID de la reserva a cancelar.
         :param with_refund: Si es True, el dinero se marca como devuelto (egreso).
@@ -367,62 +370,49 @@ class ReservationService:
         except Exception as e:
             return False, f"Error al cancelar la reserva: {str(e)}"
 
-    def convert_reservation_to_sale(self, reservation_id: int, final_payment: float) -> Tuple[bool, str]:
+    def convert_reservation_to_sale(self, reservation_id: int, final_payment: float, payment_method: str) -> Tuple[bool, str]:
         """
         Convierte una reserva en una venta final.
-
-        :param reservation_id: El ID de la reserva a convertir.
-        :param final_payment: El monto final pagado (además de los abonos ya hechos).
-        :return: Una tupla (éxito, mensaje).
         """
-        try:
-            details = self.get_reservation_details(reservation_id)
-            if not details:
-                return False, "La reserva no existe."
-            
-            # 1. Crear la entrada principal en la tabla 'ventas'
-            total_amount = details['monto_total']
-            notes = details.get('notas', '')
-            client_id = details.get('id_cliente')
-            if not client_id:
-                return False, "No se pudo encontrar el ID del cliente para la venta."
+        details = self.get_reservation_details(reservation_id)
+        if not details:
+            return False, "No se encontró la reserva."
 
-            venta_query = "INSERT INTO ventas (id_cliente, monto_total, notas, fecha_venta, id_reserva_origen) VALUES (?, ?, ?, datetime('now'), ?)"
-            cursor = self.data_manager.execute_query(venta_query, (client_id, total_amount, notes, reservation_id))
+        # Validaciones
+        total_amount = details.get('monto_total', 0)
+        paid_amount = details.get('monto_abonado', 0)
+        due_amount = total_amount - paid_amount
+        
+        # Permitimos una pequeña tolerancia para errores de punto flotante.
+        if final_payment < due_amount - 0.01:
+            return False, f"El pago final (${final_payment}) es menor que el saldo pendiente (${due_amount})."
+
+        client_id = details['id_cliente']
+        notes = details.get('notas', '')
+
+        try:
+            # 1. Crear la venta
+            venta_query = """
+                INSERT INTO ventas (id_cliente, id_reserva_origen, monto_total, notas, fecha_venta, metodo_pago)
+                VALUES (?, ?, ?, ?, datetime('now'), ?)
+            """
+            venta_params = (client_id, reservation_id, total_amount, notes, payment_method)
+            cursor = self.data_manager.execute_query(venta_query, venta_params)
             
             if not cursor or not cursor.lastrowid:
-                return False, "Error al crear el registro de la venta."
+                return False, "No se pudo crear el registro de la venta."
             id_venta = cursor.lastrowid
 
-            # 2. Anular los abonos previos registrando un egreso compensatorio
-            paid_amount = details.get('monto_abonado', 0)
-            if paid_amount > 0:
-                egreso_query = "INSERT INTO egresos (monto, concepto, id_reserva) VALUES (?, ?, ?)"
-                concepto_egreso = f"Abono de reserva #{reservation_id} transferido a venta #{id_venta}"
-                self.data_manager.execute_query(egreso_query, (paid_amount, concepto_egreso, reservation_id))
+            # 2. Registrar el pago final como un ingreso si es mayor que cero
+            if final_payment > 0:
+                ingreso_query = "INSERT INTO ingresos (monto, concepto, metodo_pago, id_venta, id_reserva) VALUES (?, ?, ?, ?, ?)"
+                concepto = f"Pago final para completar reserva #{reservation_id} (Venta #{id_venta})"
+                self.data_manager.execute_query(ingreso_query, (final_payment, concepto, payment_method, id_venta, reservation_id))
 
-            # 3. Registrar cada artículo de la venta y su ingreso individual
-            for book in details['libros']:
-                # Crear el detalle de la venta
-                detalle_query = "INSERT INTO detalles_venta (id_venta, libro_isbn, cantidad, precio_unitario) VALUES (?, ?, ?, ?)"
-                detalle_cursor = self.data_manager.execute_query(detalle_query, (id_venta, book['libro_isbn'], book['cantidad'], book['precio_unitario']))
-                
-                if not detalle_cursor or not detalle_cursor.lastrowid:
-                    continue # O manejar el error de forma más robusta
-                
-                id_detalle_venta = detalle_cursor.lastrowid
-                
-                # Crear el ingreso asociado a ese detalle específico
-                item_total = book['cantidad'] * book['precio_unitario']
-                ingreso_query = "INSERT INTO ingresos (monto, concepto, id_venta, id_detalle_venta) VALUES (?, ?, ?, ?)"
-                concepto_ingreso = f"Venta de: {book.get('titulo', book['libro_isbn'])}"
-                self.data_manager.execute_query(ingreso_query, (item_total, concepto_ingreso, id_venta, id_detalle_venta))
-                
-            # 4. Actualizar estado de la reserva original
-            update_res_query = "UPDATE reservas SET estado = 'COMPLETADO', fecha_actualizacion = datetime('now') WHERE id_reserva = ?"
-            self.data_manager.execute_query(update_res_query, (reservation_id,))
+            # 3. Actualizar el estado de la reserva
+            reserva_update_query = "UPDATE reservas SET estado = 'COMPLETADA', fecha_actualizacion = datetime('now') WHERE id_reserva = ?"
+            self.data_manager.execute_query(reserva_update_query, (reservation_id,))
 
-            return True, f"Venta #{id_venta} creada a partir de la reserva."
+            return True, f"Reserva convertida a venta #{id_venta} con éxito."
         except Exception as e:
-            # Considerar registrar el error de forma más detallada
-            return False, f"Error al convertir la reserva en venta: {str(e)}" 
+            return False, f"Error al convertir la reserva en venta: {e}" 

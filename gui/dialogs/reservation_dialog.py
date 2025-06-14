@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QFrame, QGraphicsBlurEffect, QLineEdit, QScrollArea, QSpacerItem,
     QSizePolicy, QApplication, QMessageBox, QInputDialog, QComboBox, QGridLayout, QAbstractButton,
-    QGroupBox, QTextEdit
+    QGroupBox, QTextEdit, QButtonGroup
 )
 from PySide6.QtGui import QFont, QMouseEvent, QPixmap, QPainter, QColor, QIcon, QIntValidator, QFontMetrics
 from PySide6.QtCore import Qt, QPoint, Signal, QSize, QTimer
@@ -13,7 +13,7 @@ from typing import List
 from .price_input_dialog import PriceInputDialog
 
 # Asumiendo que los estilos y dependencias están accesibles
-from gui.common.styles import FONTS, COLORS
+from gui.common.styles import FONTS, COLORS, STYLES
 from features.reservation_service import ReservationService
 from features.utils import format_price_with_thousands_separator
 
@@ -143,6 +143,7 @@ class ReservationDialog(QDialog):
         self.reserved_items = []    # Lista maestra con precios ORIGINALES.
         self.displayed_items = []   # Lista con precios ajustados para la UI.
         self.manual_total = None    # Si es un float, un descuento manual está activo.
+        self.payment_method = None
 
         self.current_page = 0
         self.items_per_page = 6
@@ -322,6 +323,35 @@ class ReservationDialog(QDialog):
         payment_layout.addWidget(due_label, 2, 0)
         payment_layout.addWidget(self.due_amount_label, 2, 1)
 
+        # Payment method buttons
+        payment_method_label = QLabel("Método de Pago:")
+        payment_method_label.setStyleSheet("color: #333; border: none; background-color: transparent; grid-column-span: 2;")
+        payment_layout.addWidget(payment_method_label, 3, 0, 1, 2)
+
+        self.payment_button_group = QButtonGroup(self)
+        self.payment_button_group.setExclusive(True)
+        
+        buttons_data = [
+            {"text": "Efectivo", "icon": "dinero.png"},
+            {"text": "Nequi", "icon": "nequi.png"},
+            {"text": "Daviplata", "icon": "daviplata.png"}
+        ]
+
+        payment_buttons_layout = QHBoxLayout()
+        for data in buttons_data:
+            btn = QPushButton(QIcon(os.path.join("app/imagenes", data["icon"])), f" {data['text']}")
+            btn.setIconSize(QSize(20, 20))
+            btn.setCheckable(True)
+            btn.setFixedHeight(35)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFont(QFont(FONTS["family"], 9))
+            btn.setStyleSheet(STYLES['button_toggle_style'])
+            self.payment_button_group.addButton(btn)
+            payment_buttons_layout.addWidget(btn)
+
+        self.payment_button_group.buttonClicked.connect(lambda btn: setattr(self, 'payment_method', btn.text().strip()))
+        payment_layout.addLayout(payment_buttons_layout, 4, 0, 1, 2)
+        
         left_column_layout.addWidget(payment_title)
         left_column_layout.addSpacing(5)
         left_column_layout.addWidget(payment_frame)
@@ -866,6 +896,10 @@ class ReservationDialog(QDialog):
             QMessageBox.warning(self, "Sin Artículos", "Agregue al menos un artículo a la reserva.")
             return
 
+        if not self.payment_method:
+            QMessageBox.warning(self, "Método de Pago", "Por favor, seleccione un método de pago para el abono inicial.")
+            return
+
         final_items = self.displayed_items
         
         raw_total_str = "".join(filter(str.isdigit, self.total_amount_input.text()))
@@ -913,6 +947,7 @@ class ReservationDialog(QDialog):
             book_items=final_items, 
             total_amount=final_total, 
             paid_amount=paid_amount,
+            payment_method=self.payment_method,
             notes=notes
         )
 
