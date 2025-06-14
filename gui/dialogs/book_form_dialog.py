@@ -183,6 +183,9 @@ class BookFormDialog(QDialog):
         self.frame_layout.addSpacerItem(QSpacerItem(20, 10, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed))
 
         isbn_label = QLabel("ISBN:"); isbn_label.setObjectName("fieldLabel")
+        palette_isbn = isbn_label.palette()
+        palette_isbn.setColor(isbn_label.foregroundRole(), QColor(COLORS.get('text_primary', '#202427')))
+        isbn_label.setPalette(palette_isbn)
         self.isbn_input = QLineEdit(); self.isbn_input.setPlaceholderText("Ingresar ISBN y presionar Enter")
         self.isbn_input.returnPressed.connect(self.buscar_isbn)
         self.frame_layout.addWidget(isbn_label)
@@ -195,6 +198,9 @@ class BookFormDialog(QDialog):
         def create_field(label, placeholder, on_enter=None):
             w = QWidget(); l = QVBoxLayout(w); l.setContentsMargins(0,0,0,0); l.setSpacing(1)
             lbl = QLabel(label); lbl.setObjectName("fieldLabel")
+            palette_lbl = lbl.palette()
+            palette_lbl.setColor(lbl.foregroundRole(), QColor(COLORS.get('text_primary', '#202427')))
+            lbl.setPalette(palette_lbl)
             inp = QLineEdit(); inp.setPlaceholderText(placeholder)
             if on_enter: inp.returnPressed.connect(on_enter)
             l.addWidget(lbl); l.addWidget(inp)
@@ -357,6 +363,8 @@ class BookFormDialog(QDialog):
 
     def exec(self):
         self._enable_blur(True)
+        self.adjustSize()
+        self._recenter()
         result = super().exec()
         self._enable_blur(False)
         return result
