@@ -384,3 +384,5 @@ class DeleteBookDialog(QDialog):
             p_geom = self.parent().geometry()
             self.move(p_geom.x() + (p_geom.width() - self.width()) // 2, 
                       p_geom.y() + (p_geom.height() - self.height()) // 2)
+    
+print("hola")
