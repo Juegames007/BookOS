@@ -3,6 +3,7 @@ from typing import List, Optional # Importamos Optional por si algún método lo
 from .interfaces import DataManagerInterface
 # Importamos SQLManager para el type hint en el constructor, aunque podría ser solo DataManagerInterface
 from .sqlmanager import SQLManager # O cualquier otra implementación por defecto que queramos
+from .models import Ingreso, Egreso
 
 class DataManager:
     def __init__(self, base_de_datos: DataManagerInterface):
@@ -105,3 +106,43 @@ class DataManager:
         que espera un método llamado fetch_query.
         """
         return self.obtener_datos_con_consulta(query, params)
+
+    # --- Métodos para Finanzas ---
+
+    def get_ingresos_by_date(self, date: str) -> List[Ingreso]:
+        """
+        Obtiene todos los ingresos para una fecha específica, devolviendo una lista de objetos Ingreso.
+        """
+        if hasattr(self.base_de_datos, 'get_ingresos_by_date'):
+            ingresos_data = self.base_de_datos.get_ingresos_by_date(date)
+            return [Ingreso(**data) for data in ingresos_data]
+        else:
+            raise NotImplementedError(f"La estrategia {type(self.base_de_datos).__name__} no soporta 'get_ingresos_by_date'.")
+
+    def get_egresos_by_date(self, date: str) -> List[Egreso]:
+        """
+        Obtiene todos los egresos para una fecha específica, devolviendo una lista de objetos Egreso.
+        """
+        if hasattr(self.base_de_datos, 'get_egresos_by_date'):
+            egresos_data = self.base_de_datos.get_egresos_by_date(date)
+            return [Egreso(**data) for data in egresos_data]
+        else:
+            raise NotImplementedError(f"La estrategia {type(self.base_de_datos).__name__} no soporta 'get_egresos_by_date'.")
+
+    def update_ingreso(self, id_ingreso: int, monto: float, concepto: str, metodo_pago: str) -> bool:
+        """
+        Actualiza un registro de ingreso existente.
+        """
+        if hasattr(self.base_de_datos, 'update_ingreso'):
+            return self.base_de_datos.update_ingreso(id_ingreso, monto, concepto, metodo_pago)
+        else:
+            raise NotImplementedError(f"La estrategia {type(self.base_de_datos).__name__} no soporta 'update_ingreso'.")
+
+    def update_egreso(self, id_egreso: int, monto: float, concepto: str, metodo_pago: str) -> bool:
+        """
+        Actualiza un registro de egreso existente.
+        """
+        if hasattr(self.base_de_datos, 'update_egreso'):
+            return self.base_de_datos.update_egreso(id_egreso, monto, concepto, metodo_pago)
+        else:
+            raise NotImplementedError(f"La estrategia {type(self.base_de_datos).__name__} no soporta 'update_egreso'.")

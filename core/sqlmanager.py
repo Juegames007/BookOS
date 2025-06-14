@@ -154,3 +154,45 @@ class SQLManager(DataManagerInterface):
 
     def limpiar_libros_agotados(self, *args, **kwargs):
         raise NotImplementedError("El método limpiar_libros_agotados no está implementado porque no es necesario en SQLManager.")
+
+    # --- Métodos para Finanzas ---
+
+    def get_ingresos_by_date(self, date: str) -> List[Dict[str, Any]]:
+        """
+        Obtiene todos los ingresos para una fecha específica.
+        La fecha debe estar en formato 'YYYY-MM-DD'.
+        """
+        query = "SELECT * FROM ingresos WHERE date(fecha) = ?"
+        return self.fetch_query(query, (date,))
+
+    def get_egresos_by_date(self, date: str) -> List[Dict[str, Any]]:
+        """
+        Obtiene todos los egresos para una fecha específica.
+        La fecha debe estar en formato 'YYYY-MM-DD'.
+        """
+        query = "SELECT * FROM egresos WHERE date(fecha) = ?"
+        return self.fetch_query(query, (date,))
+
+    def update_ingreso(self, id_ingreso: int, monto: float, concepto: str, metodo_pago: str) -> bool:
+        """
+        Actualiza un registro de ingreso existente.
+        """
+        query = """
+        UPDATE ingresos
+        SET monto = ?, concepto = ?, metodo_pago = ?, fecha = datetime('now', 'localtime')
+        WHERE id_ingreso = ?
+        """
+        cursor = self.execute_query(query, (monto, concepto, metodo_pago, id_ingreso))
+        return cursor.rowcount > 0 if cursor else False
+
+    def update_egreso(self, id_egreso: int, monto: float, concepto: str, metodo_pago: str) -> bool:
+        """
+        Actualiza un registro de egreso existente.
+        """
+        query = """
+        UPDATE egresos
+        SET monto = ?, concepto = ?, metodo_pago = ?, fecha = datetime('now', 'localtime')
+        WHERE id_egreso = ?
+        """
+        cursor = self.execute_query(query, (monto, concepto, metodo_pago, id_egreso))
+        return cursor.rowcount > 0 if cursor else False

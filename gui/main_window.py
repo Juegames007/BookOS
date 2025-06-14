@@ -34,10 +34,12 @@ from features.sell_service import SellService
 from features.return_service import ReturnService
 from features.delete_service import DeleteService
 from features.egreso_service import EgresoService
+from features.finance_service import FinanceService
 from gui.dialogs.search_results_window import SearchResultsWindow
 from gui.dialogs.delete_book_dialog import DeleteBookDialog
 from gui.dialogs.egreso_dialog import EgresoDialog
 from core.sqlmanager import SQLManager
+from gui.dialogs.modify_finances_dialog import ModifyFinancesDialog
 
 class VentanaGestionLibreria(QMainWindow):
     """
@@ -121,6 +123,7 @@ class VentanaGestionLibreria(QMainWindow):
         self.return_service = self.dependency_factory.get_return_service()
         self.delete_service = self.dependency_factory.get_delete_service()
         self.egreso_service = self.dependency_factory.get_egreso_service()
+        self.finance_service = self.dependency_factory.get_finance_service()
 
         if self.current_search_results_window is None:
             self.current_search_results_window = SearchResultsWindow(
@@ -196,6 +199,7 @@ class VentanaGestionLibreria(QMainWindow):
             "Devoluciones": (ReturnDialog, self.return_service),
             "Reportar Gasto": (EgresoDialog, self.egreso_service),
             "Apartar / Ver": (ReservationOptionsDialog,),
+            "Modificar Finanzas": (ModifyFinancesDialog, self.finance_service),
         }
 
         if accion_limpia in dialog_map:

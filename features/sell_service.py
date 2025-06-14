@@ -87,8 +87,8 @@ class SellService:
                 raise Exception("No se pudo crear el registro de venta.")
 
             # 4. Registrar el ingreso total de la venta
-            income_data = (total_amount, f"Ingreso por Venta #{sale_id}", sale_id)
-            cursor.execute("INSERT INTO ingresos (monto, concepto, id_venta) VALUES (?, ?, ?)", income_data)
+            income_data = (total_amount, f"Ingreso por Venta #{sale_id}", payment_method, sale_id)
+            cursor.execute("INSERT INTO ingresos (monto, concepto, metodo_pago, id_venta) VALUES (?, ?, ?, ?)", income_data)
 
             # 5. Iterar sobre los artículos, registrarlos en 'detalles_venta' y actualizar 'inventario'
             for item in items:

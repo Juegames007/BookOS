@@ -20,6 +20,7 @@ try:
     from features.reservation_service import ReservationService
     from features.sell_service import SellService
     from features.return_service import ReturnService
+    from features.finance_service import FinanceService
 except ImportError as e:
     # Si 'core' no está directamente en PYTHONPATH, intentar ajuste relativo
     # Esto es útil si 'dependencies.py' está en 'app/' y 'core' está al mismo nivel ('../core')
@@ -41,6 +42,7 @@ except ImportError as e:
     from features.reservation_service import ReservationService
     from features.sell_service import SellService
     from features.return_service import ReturnService
+    from features.finance_service import FinanceService
 
 
 # Determinar rutas importantes
@@ -65,6 +67,7 @@ class DependencyFactory:
     _reservation_service_instance: Optional[ReservationService] = None
     _sell_service_instance: Optional[SellService] = None
     _return_service_instance: Optional[ReturnService] = None
+    _finance_service_instance: Optional[FinanceService] = None
 
     @classmethod
     def get_sql_manager(cls) -> SQLManager:
@@ -216,6 +219,14 @@ class DependencyFactory:
             cls._return_service_instance = ReturnService(data_manager)
             print("ReturnService inicializado.")
         return cls._return_service_instance
+
+    @classmethod
+    def get_finance_service(cls) -> FinanceService:
+        if cls._finance_service_instance is None:
+            data_manager = cls.get_data_manager()
+            cls._finance_service_instance = FinanceService(data_manager)
+            print("FinanceService inicializado.")
+        return cls._finance_service_instance
 
 # Para probar este módulo directamente (opcional)
 if __name__ == '__main__':
