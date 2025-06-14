@@ -62,7 +62,6 @@ class VentanaGestionLibreria(QMainWindow):
 
         self._init_background()
         self._setup_main_menu()
-        self._initialize_services()
         
         target_width, target_height = 1366, 768
         try:
@@ -110,6 +109,7 @@ class VentanaGestionLibreria(QMainWindow):
             self.main_menu_widget.setStyleSheet("QWidget { background: transparent; }")
             self.main_menu_widget.setGraphicsEffect(self.blur_effect)
 
+        self._initialize_services()
         self._center_window()
 
     def _initialize_services(self):
@@ -127,6 +127,7 @@ class VentanaGestionLibreria(QMainWindow):
                 [], "", parent=self
             )
             self.current_search_results_window.finished.connect(self.main_menu_content.show)
+            self.current_search_results_window.finished.connect(self.title_label.show)
         
     def _iniciar_busqueda_desde_componente(self, termino_busqueda: str, filtros: dict):
         if not termino_busqueda: return
@@ -140,10 +141,12 @@ class VentanaGestionLibreria(QMainWindow):
                 parent=self
             )
             self.current_search_results_window.finished.connect(self.main_menu_content.show)
+            self.current_search_results_window.finished.connect(self.title_label.show)
         else:
             self.current_search_results_window.update_results(libros_encontrados, termino_busqueda)
 
         self.main_menu_content.hide()
+        self.title_label.hide()
         self.current_search_results_window.show()
 
     def paintEvent(self, event):
@@ -179,6 +182,7 @@ class VentanaGestionLibreria(QMainWindow):
         self.current_dialog.finished.connect(self._on_dialog_finished)
         
         self.main_menu_content.hide()
+        self.title_label.hide()
         self.current_dialog.show()
 
     def _handle_menu_action(self, accion: str):
@@ -219,6 +223,7 @@ class VentanaGestionLibreria(QMainWindow):
         dialog.finished.connect(self._on_dialog_finished)
 
         self.main_menu_content.hide()
+        self.title_label.hide()
         dialog.show()
     
     def _switch_dialog(self, next_dialog_class, *args):
@@ -234,6 +239,7 @@ class VentanaGestionLibreria(QMainWindow):
 
     def _on_dialog_finished(self):
         self.main_menu_content.show()
+        self.title_label.show()
         if self.current_dialog:
              # Nos aseguramos de que el diálogo que se acaba de cerrar no vuelva a llamar a esto
             try:
