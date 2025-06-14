@@ -14,13 +14,14 @@ class EgresoService:
         """
         self.data_manager = data_manager
 
-    def registrar_egreso(self, monto: float, concepto: str, id_reserva: Optional[int] = None) -> bool:
+    def registrar_egreso(self, monto: float, concepto: str, metodo_pago: str, id_reserva: Optional[int] = None) -> bool:
         """
         Registra un nuevo egreso en la base de datos.
 
         Args:
             monto: El monto del egreso.
             concepto: La descripción o concepto del egreso.
+            metodo_pago: El método de pago utilizado para el egreso.
             id_reserva: Opcionalmente, el ID de una reserva asociada.
 
         Returns:
@@ -29,9 +30,13 @@ class EgresoService:
         if not concepto or monto <= 0:
             print("Error: El concepto no puede estar vacío y el monto debe ser positivo.")
             return False
+        
+        if not metodo_pago:
+            print("Error: El método de pago es obligatorio.")
+            return False
             
-        query = "INSERT INTO egresos (monto, concepto, id_reserva) VALUES (?, ?, ?)"
-        params = (monto, concepto, id_reserva)
+        query = "INSERT INTO egresos (monto, concepto, metodo_pago, id_reserva) VALUES (?, ?, ?, ?)"
+        params = (monto, concepto, metodo_pago, id_reserva)
         
         try:
             self.data_manager.execute_query(query, params)

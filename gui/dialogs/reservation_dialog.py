@@ -133,7 +133,7 @@ class ReservationDialog(QDialog):
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         
-        self.setMinimumSize(770, 630)
+        self.setMinimumSize(820, 650)
 
         self.font_family = FONTS.get("family", "Arial")
         self._drag_pos = QPoint()
@@ -325,7 +325,7 @@ class ReservationDialog(QDialog):
 
         # Payment method buttons
         payment_method_label = QLabel("Método de Pago:")
-        payment_method_label.setStyleSheet("color: #333; border: none; background-color: transparent; grid-column-span: 2;")
+        payment_method_label.setStyleSheet("color: #333; border: none; background-color: transparent;")
         payment_layout.addWidget(payment_method_label, 3, 0, 1, 2)
 
         self.payment_button_group = QButtonGroup(self)
@@ -334,7 +334,8 @@ class ReservationDialog(QDialog):
         buttons_data = [
             {"text": "Efectivo", "icon": "dinero.png"},
             {"text": "Nequi", "icon": "nequi.png"},
-            {"text": "Daviplata", "icon": "daviplata.png"}
+            {"text": "Daviplata", "icon": "daviplata.png"},
+            {"text": "Bold", "icon": "Bold.png"}
         ]
 
         payment_buttons_layout = QHBoxLayout()
@@ -409,6 +410,7 @@ class ReservationDialog(QDialog):
 
         # --- COLUMNA DERECHA (BÚSQUEDA E ITEMS) ---
         right_column = QWidget()
+        right_column.setFixedWidth(450)
         right_column_layout = QVBoxLayout(right_column)
         right_column_layout.setContentsMargins(0, 0, 0, 0)
         right_column_layout.setSpacing(0)
@@ -530,8 +532,8 @@ class ReservationDialog(QDialog):
         right_column_layout.addSpacing(5)
         right_column_layout.addWidget(items_frame)
         
-        content_layout.addWidget(left_column, 1)
-        content_layout.addWidget(right_column, 2)
+        content_layout.addWidget(left_column)
+        content_layout.addWidget(right_column)
 
         container_layout.addWidget(content_widget)
 

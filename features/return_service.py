@@ -20,9 +20,9 @@ class ReturnService:
 
         # Manejar discos y promociones genéricas
         if identifier_lower.startswith('disc'):
-            return self._create_generic_item('disc', 'Disco', 5000) # Precio base de ejemplo
+            return self._create_generic_item('disc_return', 'Disco', 5000) # Precio base de ejemplo
         if identifier_lower.startswith('promo'):
-            return self._create_generic_item('promo_10000', 'Promoción', 10000)
+            return self._create_generic_item('promo_return', 'Promoción', 10000)
 
         # Manejar libros por ISBN
         return self._find_book_by_isbn(identifier)
@@ -73,7 +73,7 @@ class ReturnService:
             logging.error(f"Error en la base de datos al buscar libro para devolución: {e}")
             return {"status": "error", "message": str(e)}
 
-    def process_return(self, items: List[Dict[str, Any]], total_amount: float) -> Tuple[bool, str]:
+    def process_return(self, items: List[Dict[str, Any]], total_amount: float, payment_method: str) -> Tuple[bool, str]:
         """
         Procesa la devolución de una lista de artículos.
         """
@@ -89,16 +89,16 @@ class ReturnService:
 
             # 1. Registrar la devolución principal
             cursor.execute(
-                "INSERT INTO devoluciones (monto_total) VALUES (?)",
-                (total_amount,)
+                "INSERT INTO devoluciones (monto_total, metodo_pago) VALUES (?, ?)",
+                (total_amount, payment_method)
             )
             id_devolucion = cursor.lastrowid
 
             # 2. Registrar el egreso
             concepto = f"Devolución #{id_devolucion}"
             cursor.execute(
-                "INSERT INTO egresos (monto, concepto) VALUES (?, ?)",
-                (total_amount, concepto)
+                "INSERT INTO egresos (monto, concepto, metodo_pago) VALUES (?, ?, ?)",
+                (total_amount, concepto, payment_method)
             )
 
             # 3. Procesar cada artículo devuelto

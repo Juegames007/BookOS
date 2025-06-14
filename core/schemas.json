@@ -6,7 +6,7 @@
       },
       {
         "nombre": "inventario",
-        "definicion": "(id_inventario INTEGER PRIMARY KEY AUTOINCREMENT, libro_isbn TEXT NOT NULL, posicion TEXT, cantidad INTEGER NOT NULL DEFAULT 1, fecha_adquisicion DATE DEFAULT (date('now')), fecha_actualizacion_cantidad DATE DEFAULT (date('now')), FOREIGN KEY (libro_isbn) REFERENCES libros (isbn) ON DELETE CASCADE ON UPDATE CASCADE)"
+        "definicion": "(id_inventario INTEGER PRIMARY KEY AUTOINCREMENT, libro_isbn TEXT NOT NULL, posicion TEXT, cantidad INTEGER NOT NULL DEFAULT 1, fecha_adquisicion DATE DEFAULT (date('now')), fecha_actualizacion_cantidad DATETIME DEFAULT (datetime('now', 'localtime')), FOREIGN KEY (libro_isbn) REFERENCES libros (isbn) ON DELETE CASCADE ON UPDATE CASCADE)"
       },
       {
         "nombre": "clientes",
@@ -14,7 +14,7 @@
       },
       {
         "nombre": "reservas",
-        "definicion": "(id_reserva INTEGER PRIMARY KEY AUTOINCREMENT, id_cliente INTEGER NOT NULL, monto_total REAL NOT NULL, estado TEXT NOT NULL, metodo_pago_inicial TEXT NOT NULL, notas TEXT, fecha_creacion DATETIME DEFAULT (datetime('now')), fecha_actualizacion DATETIME DEFAULT (datetime('now')), FOREIGN KEY (id_cliente) REFERENCES clientes (id_cliente) ON DELETE RESTRICT)"
+        "definicion": "(id_reserva INTEGER PRIMARY KEY AUTOINCREMENT, id_cliente INTEGER NOT NULL, monto_total REAL NOT NULL, estado TEXT NOT NULL, metodo_pago_inicial TEXT NOT NULL, notas TEXT, fecha_creacion DATETIME DEFAULT (datetime('now', 'localtime')), fecha_actualizacion DATETIME DEFAULT (datetime('now', 'localtime')), FOREIGN KEY (id_cliente) REFERENCES clientes (id_cliente) ON DELETE RESTRICT)"
       },
       {
         "nombre": "detalles_reserva",
@@ -22,7 +22,7 @@
       },
       {
         "nombre": "ventas",
-        "definicion": "(id_venta INTEGER PRIMARY KEY AUTOINCREMENT, id_cliente INTEGER NOT NULL, id_reserva_origen INTEGER, monto_total REAL NOT NULL, metodo_pago TEXT NOT NULL, notas TEXT, fecha_venta DATETIME DEFAULT (datetime('now')), FOREIGN KEY (id_cliente) REFERENCES clientes (id_cliente) ON DELETE RESTRICT, FOREIGN KEY (id_reserva_origen) REFERENCES reservas (id_reserva) ON DELETE SET NULL)"
+        "definicion": "(id_venta INTEGER PRIMARY KEY AUTOINCREMENT, id_cliente INTEGER NOT NULL, id_reserva_origen INTEGER, monto_total REAL NOT NULL, metodo_pago TEXT NOT NULL, notas TEXT, fecha_venta DATETIME DEFAULT (datetime('now', 'localtime')), FOREIGN KEY (id_cliente) REFERENCES clientes (id_cliente) ON DELETE RESTRICT, FOREIGN KEY (id_reserva_origen) REFERENCES reservas (id_reserva) ON DELETE SET NULL)"
       },
       {
         "nombre": "detalles_venta",
@@ -30,19 +30,19 @@
       },
       {
         "nombre": "ingresos",
-        "definicion": "(id_ingreso INTEGER PRIMARY KEY AUTOINCREMENT, monto REAL NOT NULL, concepto TEXT, metodo_pago TEXT NOT NULL, id_reserva INTEGER, id_venta INTEGER, id_detalle_venta INTEGER, fecha DATETIME DEFAULT (datetime('now')), FOREIGN KEY (id_reserva) REFERENCES reservas (id_reserva) ON DELETE SET NULL, FOREIGN KEY (id_venta) REFERENCES ventas (id_venta) ON DELETE SET NULL, FOREIGN KEY (id_detalle_venta) REFERENCES detalles_venta (id_detalle_venta) ON DELETE SET NULL)"
+        "definicion": "(id_ingreso INTEGER PRIMARY KEY AUTOINCREMENT, monto REAL NOT NULL, concepto TEXT, metodo_pago TEXT NOT NULL, id_reserva INTEGER, id_venta INTEGER, id_detalle_venta INTEGER, fecha DATETIME DEFAULT (datetime('now', 'localtime')), FOREIGN KEY (id_reserva) REFERENCES reservas (id_reserva) ON DELETE SET NULL, FOREIGN KEY (id_venta) REFERENCES ventas (id_venta) ON DELETE SET NULL, FOREIGN KEY (id_detalle_venta) REFERENCES detalles_venta (id_detalle_venta) ON DELETE SET NULL)"
       },
       {
         "nombre": "egresos",
-        "definicion": "(id_egreso INTEGER PRIMARY KEY AUTOINCREMENT, monto REAL NOT NULL, concepto TEXT, id_reserva INTEGER, fecha DATETIME DEFAULT (datetime('now')), FOREIGN KEY (id_reserva) REFERENCES reservas (id_reserva) ON DELETE SET NULL)"
+        "definicion": "(id_egreso INTEGER PRIMARY KEY AUTOINCREMENT, monto REAL NOT NULL, concepto TEXT, metodo_pago TEXT NOT NULL, id_reserva INTEGER, fecha DATETIME DEFAULT (datetime('now', 'localtime')), FOREIGN KEY (id_reserva) REFERENCES reservas (id_reserva) ON DELETE SET NULL)"
       },
       {
         "nombre": "historial_busquedas",
-        "definicion": "(id_busqueda INTEGER PRIMARY KEY AUTOINCREMENT, termino_buscado TEXT NOT NULL, fecha_busqueda DATETIME DEFAULT (datetime('now')), resultados_encontrados INTEGER DEFAULT 0)"
+        "definicion": "(id_busqueda INTEGER PRIMARY KEY AUTOINCREMENT, termino_buscado TEXT NOT NULL, fecha_busqueda DATETIME DEFAULT (datetime('now', 'localtime')), resultados_encontrados INTEGER DEFAULT 0)"
       },
       {
         "nombre": "devoluciones",
-        "definicion": "(id_devolucion INTEGER PRIMARY KEY AUTOINCREMENT, monto_total REAL NOT NULL, notas TEXT, fecha_devolucion DATETIME DEFAULT (datetime('now')))"
+        "definicion": "(id_devolucion INTEGER PRIMARY KEY AUTOINCREMENT, monto_total REAL NOT NULL, metodo_pago TEXT NOT NULL, notas TEXT, fecha_devolucion DATETIME DEFAULT (datetime('now', 'localtime')))"
       },
       {
         "nombre": "detalles_devolucion",

@@ -248,63 +248,36 @@ class ReservationService:
 
     def get_reservation_details(self, reservation_id: int) -> Optional[Dict[str, Any]]:
         """
-        Obtiene los detalles completos de una reserva específica.
-        Esto incluye datos del cliente, libros reservados y estado financiero.
-        :param reservation_id: El ID de la reserva a buscar.
-        :return: Un diccionario con los detalles de la reserva, o None si no se encuentra.
+        Obtiene todos los detalles de una reserva específica, incluyendo los libros.
         """
-        # 1. Obtener detalles básicos de la reserva y del cliente
-        base_query = """
+        # Consulta para los detalles principales de la reserva
+        main_query = """
             SELECT
-                r.id_reserva,
-                r.id_cliente,
-                r.monto_total,
-                r.notas,
+                r.id_reserva, r.monto_total, r.notas, r.estado,
                 r.fecha_creacion as fecha_reserva,
-                c.nombre as cliente_nombre,
-                c.telefono as cliente_telefono
+                c.id_cliente, c.nombre as cliente_nombre, c.telefono as cliente_telefono,
+                (SELECT SUM(monto) FROM ingresos WHERE id_reserva = r.id_reserva) as monto_abonado
             FROM reservas r
             JOIN clientes c ON r.id_cliente = c.id_cliente
             WHERE r.id_reserva = ?
         """
-        results = self.data_manager.fetch_query(base_query, (reservation_id,))
-        reservation_details = results[0] if results else None
-
-        if not reservation_details:
+        main_details = self.data_manager.fetch_query(main_query, (reservation_id,))
+        if not main_details:
             return None
 
-        # 2. Obtener la suma de abonos de la tabla de ingresos
-        paid_amount_query = "SELECT SUM(monto) as total_abonado FROM ingresos WHERE id_reserva = ?"
-        paid_amount_results = self.data_manager.fetch_query(paid_amount_query, (reservation_id,))
-        paid_amount_result = paid_amount_results[0] if paid_amount_results else None
-        reservation_details['monto_abonado'] = paid_amount_result['total_abonado'] if paid_amount_result and paid_amount_result['total_abonado'] else 0
+        details = main_details[0]
 
-        # 3. Obtener los libros asociados a la reserva
+        # Consulta para los libros/items en la reserva
         books_query = """
-            SELECT
-                dr.libro_isbn,
-                l.titulo,
-                dr.cantidad,
-                dr.precio_unitario
+            SELECT dr.libro_isbn, dr.cantidad, dr.precio_unitario, l.titulo
             FROM detalles_reserva dr
             LEFT JOIN libros l ON dr.libro_isbn = l.isbn
             WHERE dr.id_reserva = ?
         """
-        books = self.data_manager.fetch_query(books_query, (reservation_id,))
+        book_details = self.data_manager.fetch_query(books_query, (reservation_id,))
         
-        if books:
-            for book in books:
-                if not book.get('titulo'):
-                    if book['libro_isbn'].startswith('promo_'):
-                        book['titulo'] = 'Promoción'
-                    elif book['libro_isbn'].startswith('disc_'):
-                        book['titulo'] = 'Disco'
-                    else:
-                        book['titulo'] = 'Artículo Genérico'
-
-        reservation_details['libros'] = books if books else []
-
-        return reservation_details
+        details['libros'] = book_details
+        return details
 
     def add_deposit_to_reservation(self, reservation_id: int, amount: float, payment_method: str) -> Tuple[bool, str]:
         """
@@ -320,7 +293,7 @@ class ReservationService:
             self.data_manager.execute_query(ingreso_query, (amount, concepto, payment_method, reservation_id))
 
             # Actualizar la fecha de la reserva para reflejar actividad reciente
-            update_reserva_query = "UPDATE reservas SET fecha_actualizacion = datetime('now') WHERE id_reserva = ?"
+            update_reserva_query = "UPDATE reservas SET fecha_actualizacion = datetime('now', 'localtime') WHERE id_reserva = ?"
             self.data_manager.execute_query(update_reserva_query, (reservation_id,))
             
             return True, "Abono añadido con éxito."
@@ -331,44 +304,34 @@ class ReservationService:
         """
         Cancela una reserva, opcionalmente registra un egreso por el monto abonado
         y devuelve los libros al inventario.
-
-        :param reservation_id: El ID de la reserva a cancelar.
-        :param with_refund: Si es True, el dinero se marca como devuelto (egreso).
-                            Si es False, el dinero se considera una ganancia.
-        :return: Una tupla (éxito, mensaje).
         """
+        details = self.get_reservation_details(reservation_id)
+        if not details:
+            return False, "La reserva no existe."
+        
         try:
-            details = self.get_reservation_details(reservation_id)
-            if not details:
-                return False, "La reserva no existe."
+            # Revertir el inventario para cada libro
+            for book in details.get('libros', []):
+                # Solo los libros reales (con ISBN no genérico) afectan el inventario
+                if not book['libro_isbn'].startswith(('promo_', 'disc_')):
+                    revert_query = "UPDATE inventario SET cantidad = cantidad + ? WHERE libro_isbn = ?"
+                    self.data_manager.execute_query(revert_query, (book['cantidad'], book['libro_isbn']))
 
-            # 1. Revertir el inventario solo de libros físicos
-            for book in details['libros']:
-                isbn = book.get('libro_isbn', '')
-                if not (isbn.startswith('promo_') or isbn.startswith('disc_')):
-                    update_inv_query = "UPDATE inventario SET cantidad = cantidad + ? WHERE libro_isbn = ?"
-                    self.data_manager.execute_query(update_inv_query, (book['cantidad'], isbn))
+            # Registrar egreso si se hace devolución de dinero
+            if with_refund:
+                paid_amount = details.get('monto_abonado', 0)
+                if paid_amount > 0:
+                    egreso_query = "INSERT INTO egresos (monto, concepto, id_reserva, metodo_pago) VALUES (?, ?, ?, ?)"
+                    # Asumimos que la devolución se hace en efectivo, se podría hacer más complejo
+                    self.data_manager.execute_query(egreso_query, (paid_amount, f"Devolución por cancelación de reserva #{reservation_id}", reservation_id, "Efectivo"))
 
-            # 2. Manejar la contabilidad del abono
-            paid_amount = details.get('monto_abonado', 0)
-            if paid_amount > 0:
-                if with_refund:
-                    # Registrar un egreso por el dinero devuelto
-                    egreso_query = "INSERT INTO egresos (monto, concepto, id_reserva) VALUES (?, ?, ?)"
-                    concepto = f"Devolución de abono por cancelación de reserva #{reservation_id}"
-                    self.data_manager.execute_query(egreso_query, (paid_amount, concepto, reservation_id))
-                
-                # En ambos casos (con o sin devolución), el ingreso original se anula o reclasifica.
-                # Para simplificar, marcaremos el estado de la reserva como CANCELADO.
-                # No eliminamos el ingreso para mantener un registro histórico.
-                
-            # 3. Actualizar el estado de la reserva
-            update_res_query = "UPDATE reservas SET estado = 'CANCELADO', fecha_actualizacion = datetime('now') WHERE id_reserva = ?"
-            self.data_manager.execute_query(update_res_query, (reservation_id,))
+            # Finalmente, marcar la reserva como CANCELADA
+            cancel_query = "UPDATE reservas SET estado = 'CANCELADA', fecha_actualizacion = datetime('now', 'localtime') WHERE id_reserva = ?"
+            self.data_manager.execute_query(cancel_query, (reservation_id,))
             
-            return True, f"Reserva #{reservation_id} cancelada con éxito."
+            return True, f"Reserva #{reservation_id} cancelada."
         except Exception as e:
-            return False, f"Error al cancelar la reserva: {str(e)}"
+            return False, f"Error inesperado al cancelar la reserva: {e}"
 
     def convert_reservation_to_sale(self, reservation_id: int, final_payment: float, payment_method: str) -> Tuple[bool, str]:
         """
@@ -383,18 +346,17 @@ class ReservationService:
         paid_amount = details.get('monto_abonado', 0)
         due_amount = total_amount - paid_amount
         
-        # Permitimos una pequeña tolerancia para errores de punto flotante.
         if final_payment < due_amount - 0.01:
             return False, f"El pago final (${final_payment}) es menor que el saldo pendiente (${due_amount})."
 
-        client_id = details['id_cliente']
+        client_id = details['cliente_id']
         notes = details.get('notas', '')
 
         try:
             # 1. Crear la venta
             venta_query = """
                 INSERT INTO ventas (id_cliente, id_reserva_origen, monto_total, notas, fecha_venta, metodo_pago)
-                VALUES (?, ?, ?, ?, datetime('now'), ?)
+                VALUES (?, ?, ?, ?, datetime('now', 'localtime'), ?)
             """
             venta_params = (client_id, reservation_id, total_amount, notes, payment_method)
             cursor = self.data_manager.execute_query(venta_query, venta_params)
@@ -410,8 +372,14 @@ class ReservationService:
                 self.data_manager.execute_query(ingreso_query, (final_payment, concepto, payment_method, id_venta, reservation_id))
 
             # 3. Actualizar el estado de la reserva
-            reserva_update_query = "UPDATE reservas SET estado = 'COMPLETADA', fecha_actualizacion = datetime('now') WHERE id_reserva = ?"
+            reserva_update_query = "UPDATE reservas SET estado = 'COMPLETADA', fecha_actualizacion = datetime('now', 'localtime') WHERE id_reserva = ?"
             self.data_manager.execute_query(reserva_update_query, (reservation_id,))
+
+            # 4. Copiar los detalles de la reserva a los detalles de la venta
+            book_items = details.get('libros', [])
+            for item in book_items:
+                detail_data = (id_venta, item['libro_isbn'], item['cantidad'], item['precio_unitario'])
+                self.data_manager.execute_query("INSERT INTO detalles_venta (id_venta, libro_isbn, cantidad, precio_unitario) VALUES (?, ?, ?, ?)", detail_data)
 
             return True, f"Reserva convertida a venta #{id_venta} con éxito."
         except Exception as e:

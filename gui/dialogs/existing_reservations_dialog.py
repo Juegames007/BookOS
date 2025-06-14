@@ -39,7 +39,8 @@ class FinalPaymentDialog(QDialog):
         buttons_data = [
             {"text": "Efectivo", "icon": "dinero.png"},
             {"text": "Nequi", "icon": "nequi.png"},
-            {"text": "Daviplata", "icon": "daviplata.png"}
+            {"text": "Daviplata", "icon": "daviplata.png"},
+            {"text": "Bold", "icon": "Bold.png"}
         ]
 
         for data in buttons_data:
@@ -747,7 +748,8 @@ class ExistingReservationsDialog(QDialog):
         buttons_data = [
             {"text": "Efectivo", "icon": "dinero.png"},
             {"text": "Nequi", "icon": "nequi.png"},
-            {"text": "Daviplata", "icon": "daviplata.png"}
+            {"text": "Daviplata", "icon": "daviplata.png"},
+            {"text": "Bold", "icon": "Bold.png"}
         ]
 
         for data in buttons_data:

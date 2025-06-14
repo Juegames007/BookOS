@@ -2,7 +2,7 @@ import os
 from PySide6.QtWidgets import (
     QDialog, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QSpacerItem, QSizePolicy, QMessageBox, QFrame, QDoubleSpinBox,
-    QGridLayout
+    QGridLayout, QButtonGroup
 )
 from PySide6.QtGui import QFont, QIcon, QMouseEvent, QPainter, QColor
 from PySide6.QtCore import Qt, Signal, QPoint, QSize
@@ -19,6 +19,7 @@ class EgresoDialog(QDialog):
         super().__init__(parent)
         self.egreso_service = egreso_service
         self.font_family = FONTS.get("family", "Montserrat")
+        self.payment_method = None
         
         self.setWindowTitle("Registrar Egreso")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
@@ -154,6 +155,35 @@ class EgresoDialog(QDialog):
         input_layout.addWidget(self.monto_input)
         content_layout.addLayout(input_layout)
 
+        # --- Payment Method ---
+        payment_label = QLabel("Método de Pago:")
+        payment_label.setFont(QFont(self.font_family, 10, QFont.Weight.DemiBold))
+        content_layout.addWidget(payment_label)
+        
+        payment_buttons_layout = QHBoxLayout()
+        payment_buttons_layout.setSpacing(10)
+        self.payment_button_group = QButtonGroup(self)
+        self.payment_button_group.setExclusive(True)
+
+        payment_methods = [
+            ("Efectivo", "dinero.png"),
+            ("Nequi", "nequi.png"),
+            ("Daviplata", "daviplata.png"),
+            ("Bold", "Bold.png")
+        ]
+
+        for text, icon_name in payment_methods:
+            btn = QPushButton(QIcon(get_icon_path(icon_name)), f" {text}")
+            btn.setIconSize(QSize(22, 22))
+            btn.setCheckable(True)
+            btn.setFixedHeight(40)
+            btn.setStyleSheet(STYLES.get('button_toggle_transparent_style', ""))
+            btn.clicked.connect(lambda checked, b=text: self._on_payment_method_selected(b))
+            self.payment_button_group.addButton(btn)
+            payment_buttons_layout.addWidget(btn)
+        
+        content_layout.addLayout(payment_buttons_layout)
+
         # --- Botón de Registro ---
         button_layout = QHBoxLayout()
         self.registrar_button = QPushButton("Registrar Egreso")
@@ -170,6 +200,9 @@ class EgresoDialog(QDialog):
         button_layout.addWidget(self.registrar_button)
         button_layout.addStretch()
         content_layout.addLayout(button_layout)
+
+    def _on_payment_method_selected(self, method):
+        self.payment_method = method
 
     def _format_monto_input(self):
         text = self.monto_input.text()
@@ -194,7 +227,15 @@ class EgresoDialog(QDialog):
             QMessageBox.warning(self, "Monto Inválido", "Por favor, ingrese un monto mayor a cero.")
             return
 
-        success = self.egreso_service.registrar_egreso(monto=monto, concepto=concepto)
+        if not self.payment_method:
+            QMessageBox.warning(self, "Método de Pago", "Por favor, seleccione un método de pago.")
+            return
+
+        success = self.egreso_service.registrar_egreso(
+            monto=monto, 
+            concepto=concepto,
+            metodo_pago=self.payment_method
+        )
 
         if success:
             QMessageBox.information(self, "Éxito", f"El egreso '{concepto}' por ${format_price(monto)} ha sido registrado.")
